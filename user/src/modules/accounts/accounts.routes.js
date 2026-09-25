@@ -24,6 +24,16 @@ router.get('/search', requireAuth, async (req, res, next) => {
     next(err);
   }
 });
+// user-service accounts.routes.js — add (manager/ceo only)
+router.get('/', requireAuth, async (req, res, next) => {
+  try {
+    if (!['manager', 'ceo'].includes(req.user.role)) {
+      return res.status(403).json({ message: 'Access denied' });
+    }
+    const users = await accountsRepository.listAll(); // needs a simple SELECT id, full_name, email, role, created_at FROM users
+    res.json(users);
+  } catch (err) { next(err); }
+});
 
 
 module.exports = router;

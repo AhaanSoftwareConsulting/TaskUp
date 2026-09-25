@@ -232,6 +232,7 @@ export const Sidebar = ({ collapsed, setCollapsed }: SidebarProps) => {
                             </div>
                         </button>
                     )}
+                     {(role === "manager" || role === "ceo") && (
                     <NavLink
                         to={`/${role}/dashboard/teams`}
                         className={({ isActive }) =>
@@ -246,6 +247,7 @@ export const Sidebar = ({ collapsed, setCollapsed }: SidebarProps) => {
                             {!collapsed && "Teams"}
                         </div>
                     </NavLink>
+                     )}
                     <button
                         onClick={() => setCollapsed((p) => !p)}
                         className="flex items-center h-11 w-full justify-center"
