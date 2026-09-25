@@ -2,13 +2,11 @@
 import { Sidebar } from './Sidebar'
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { HomeTab } from './tabs/HomeTab'
-import { GlobalSpinner } from '../context/GlobalSpinner'
- 
 import { useAppSelector } from '../redux/app/hook'
 import { Topbar } from './TopBar'
 import { TasksPageWrapper } from './TaskPagewrapper'
-import { BoardQueryWrapper } from '../context/BoardQueryWrapper'
 import { useState } from 'react'
+import { BoardQueryWrapper } from '../hooks/BoardQueryWrapper'
 
  
 export const AdminDashboard = () => {
@@ -19,7 +17,7 @@ export const AdminDashboard = () => {
  
   const location = useLocation();
   const isChatPage = location.pathname.endsWith("/chats");
-  if (!role) return <GlobalSpinner />;
+  
  
   return (
     <div className='min-h-screen'>
@@ -40,7 +38,7 @@ export const AdminDashboard = () => {
  
         {!isChatPage && <Topbar />}
         <Routes>
-          <Route index element={role ? <HomeTab /> : <GlobalSpinner />} />
+          <Route index element={role ? <HomeTab /> : <div className="p-10 text-center text-gray-400">Loading...</div>} />
           <Route path=":boardSlug" element={<BoardQueryWrapper />} />
           <Route path="tasks" element={<TasksPageWrapper />} />
           <Route path="*" element={<Navigate to={`/`} replace />} />

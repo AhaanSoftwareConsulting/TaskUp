@@ -11,10 +11,9 @@ router.get('/search', requireAuth, async (req, res, next) => {
 
     const users = await accountsRepository.searchByNameOrEmail(query.trim());
 
-    // UserSearchInput.tsx expects `_id`, not `id` — map it here rather
-    // than changing the frontend's field name.
+   
     const results = users.map(({ id, email, full_name, role }) => ({
-      _id: id,
+      id,
       email,
       full_name,
       role,
@@ -26,10 +25,5 @@ router.get('/search', requireAuth, async (req, res, next) => {
   }
 });
 
-router.get('/internal/users/:id', async (req, res) => {
-  const user = await accountsRepository.getById(req.params.id);
-  if (!user) return res.status(404).json({ message: 'Not found' });
-  res.json({ id: user.id, full_name: user.full_name, email: user.email, role: user.role });
-});
 
 module.exports = router;

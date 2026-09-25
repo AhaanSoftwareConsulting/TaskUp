@@ -22,6 +22,14 @@ async function withUserInfo(task) {
 
   return {
     ...task,
+    timeManagement: {
+      estimated_time: task.estimated_time,
+      total_logged_time: task.total_logged_time,
+      delay: task.time_delay,
+      active_start_time: task.active_start_time,
+      is_running: !!task.is_running,
+      dailyLogs: [], // full daily logs aren't fetched in bulk here — see note below
+    },
     assignedTo: (task.assignedTo || []).map(resolve),
     comments: (task.comments || []).map((c) => ({
       ...c,
@@ -35,7 +43,7 @@ async function withUserInfo(task) {
 
 const createTask = async (req, res) => {
   const { boardId, columnId } = req.params;
-  const { title, description, priority, assignedTo, dueDate, startDate } = req.body;
+  const { title, description, priority, assignedTo, due_date, start_date } = req.body;
   try {
     const board = await boardRepo.findById(boardId);
     if (!board) {
@@ -49,13 +57,13 @@ const createTask = async (req, res) => {
       title,
       description,
       priority,
-      dueDate,
-      startDate,
+      due_date,
+      start_date,
       columnId,
       boardId,
       assignedTo: assignedTo || [],
     });
-    await taskRepo.addActivityLog(newTask.id, { userId: req.user._id, action: 'Task created' });
+    await taskRepo.addActivityLog(newTask.id, { userId: req.user.id, action: 'Task created' });
 
     if (assignedTo && assignedTo.length) {
       await Promise.all(
@@ -89,7 +97,7 @@ const moveTask = async (req, res) => {
       const newCol = await columnRepo.findById(newColumnId);
 
       await taskRepo.addActivityLog(taskId, {
-        userId: req.user._id,
+        userId: req.user.id,
         action: `Moved status from "${oldColumnTitle}" to "${newCol.name}"`,
       });
 
@@ -98,13 +106,13 @@ const moveTask = async (req, res) => {
       const board = await boardRepo.findById(task.board_id);
       await notifyBoardMembers({
         memberIds: board ? board.members : [],
-        actorId: req.user._id,
+        actorId: req.user.id,
         title: 'Task moved',
         message: `"${task.title}" moved from "${oldColumnTitle}" to "${newCol.name}"`,
       });
     } else {
       await taskRepo.addActivityLog(taskId, {
-        userId: req.user._id,
+        userId: req.user.id,
         action: `Changed position in ${oldColumnTitle}`,
       });
     }
@@ -129,14 +137,11 @@ const moveTask = async (req, res) => {
   }
 };
 
+// task.controller.js
 const UPDATE_FIELD_TO_COLUMN = {
-  title: null,
-  description: null,
-  priority: null,
-  dueDate: 'due_date',
-  startDate: 'start_date',
-  progress: null,
-  position: null,
+  title: null, description: null, priority: null,
+  due_date: 'due_date', start_date: 'start_date', progress: null, position: null,
+  estimated_time: 'estimated_time',   // ← add, and note field names are now snake_case matching the rest of the file
 };
 
 /**
@@ -166,7 +171,7 @@ const updateTask = async (req, res) => {
         actionText = `changed priority from ${oldValue || 'none'} to ${newValue}`;
       }
       await taskRepo.addActivityLog(taskId, {
-        userId: req.user._id,
+        userId: req.user.id,
         action: actionText,
         field: key,
         oldValue,
@@ -183,7 +188,7 @@ const updateTask = async (req, res) => {
       if (addedId) {
         const user = await getUserById(addedId);
         await taskRepo.addActivityLog(taskId, {
-          userId: req.user._id,
+          userId: req.user.id,
           action: `assigned task to ${user?.name || 'a user'}`,
           field: 'assignedTo',
           oldValue: oldIds,
@@ -209,7 +214,7 @@ const deleteTask = async (req, res) => {
     const task = await taskRepo.findById(taskId);
     if (!task) return res.status(404).json('Task already deleted');
 
-    console.log(`User ${req.user._id} deleted task: ${task.title}`);
+    console.log(`User ${req.user.id} deleted task: ${task.title}`);
     // FK ON DELETE CASCADE removes comments/attachments/activity/daily logs.
     await taskRepo.deleteById(taskId);
 
@@ -226,7 +231,7 @@ const addTaskComment = async (req, res) => {
     }
     const { taskId } = req.params;
     const { text } = req.body;
-    const userId = req.user._id;
+    const userId = req.user.id;
 
     if (!text && (!req.files || req.files.length === 0)) {
       return res.status(400).json({ message: 'Comment cannot be empty' });
@@ -286,15 +291,15 @@ const toggleTimer = async (req, res) => {
 
     await taskRepo.updateTimeManagement(taskId, {
       delay: Number(task.time_delay || 0) + sessionDelay,
-      totalLoggedTime: totalAfterSession,
-      isRunning: false,
-      activeStartTime: null,
+      total_logged_time: totalAfterSession,
+      is_running: false,
+      active_start_time: null,
     });
 
     const todayStr = now.toISOString().split('T')[0];
     await taskRepo.upsertDailyLog(taskId, todayStr, workDone);
   } else {
-    await taskRepo.updateTimeManagement(taskId, { isRunning: true, activeStartTime: now });
+    await taskRepo.updateTimeManagement(taskId, { is_running: true, active_start_time: now });
   }
 
   const updatedTask = await taskRepo.findById(taskId);
@@ -302,11 +307,11 @@ const toggleTimer = async (req, res) => {
   res.status(200).json({
     ...updatedTask,
     timeManagement: {
-      estimatedTime: updatedTask.estimated_time,
-      totalLoggedTime: updatedTask.total_logged_time,
+      estimated_time: updatedTask.estimated_time,
+      total_logged_time: updatedTask.total_logged_time,
       delay: updatedTask.time_delay,
-      activeStartTime: updatedTask.active_start_time,
-      isRunning: !!updatedTask.is_running,
+      active_start_time: updatedTask.active_start_time,
+      is_running: !!updatedTask.is_running,
       dailyLogs: dailyLogs.map((l) => ({ date: l.log_date, duration: l.duration })),
     },
   });
@@ -319,7 +324,7 @@ const getTasks = async (req, res) => {
     if (boardId && columnId) {
       const board = await boardRepo.findById(boardId);
       if (!board) return res.status(404).json({ message: 'Board not found' });
-      if (!board.members.some((m) => String(m) === String(req.user._id))) {
+      if (!board.members.some((m) => String(m) === String(req.user.id))) {
         return res.status(403).json({ message: 'Access denied' });
       }
       const tasks = await taskRepo.findByColumnAndBoard(boardId, columnId);
@@ -327,11 +332,11 @@ const getTasks = async (req, res) => {
     }
 
     if (scope === 'mine') {
-      const tasks = await taskRepo.findByAssignee(req.user._id);
+      const tasks = await taskRepo.findByAssignee(req.user.id);
       return res.status(200).json(await Promise.all(tasks.map(withUserInfo)));
     }
 
-    const boards = await boardRepo.findByMember(req.user._id);
+    const boards = await boardRepo.findByMember(req.user.id);
     const boardIds = boards.map((b) => b.id);
     const tasks = await taskRepo.findByBoards(boardIds);
     res.status(200).json(await Promise.all(tasks.map(withUserInfo)));
@@ -350,10 +355,10 @@ const uploadtaskFile = async (req, res) => {
     const files = req.files.map((file) => ({
       fileName: file.originalname,
       fileUrl: `${config.uploads.baseUrl}/${file.filename}`,
-      uploadedBy: req.user._id,
+      uploadedBy: req.user.id,
     }));
     await taskRepo.addAttachments(taskId, files);
-    await taskRepo.addActivityLog(taskId, { userId: req.user._id, action: `uploaded ${files.length} file(s)` });
+    await taskRepo.addActivityLog(taskId, { userId: req.user.id, action: `uploaded ${files.length} file(s)` });
 
     const updated = await taskRepo.findFull(taskId);
     res.status(200).json(await withUserInfo(updated));
@@ -380,7 +385,7 @@ const deleteTaskFile = async (req, res) => {
     }
 
     await taskRepo.addActivityLog(taskId, {
-      userId: req.user._id,
+      userId: req.user.id,
       action: `Deleted attachment: ${attachment?.file_name || 'Unknown'}`,
     });
 

@@ -1,5 +1,5 @@
 import { createAsyncThunk, createSlice, type PayloadAction } from "@reduxjs/toolkit";
-import type { Task, } from "../../../types/allType";
+import type { Task, } from "../../../types/board.Types";
 import axiosClient from "../../../api/boardApiClient";
 import { deleteColumn } from "../Column/columnSlice";
 
@@ -162,27 +162,23 @@ const taskSlice = createSlice({
             .addCase(moveTask.pending, (state, action) => {
                 state.loading = "pending";
                 const { taskId, newColumnId, newPosition } = action.meta.arg;
-                const taskToMove = state.task.find(t => t._id === taskId);
+                const taskToMove = state.task.find(t => t.id === taskId);
                 if (taskToMove) {
-                    taskToMove.column =
-                        typeof taskToMove.column === "object"
-                            ? { ...taskToMove.column, _id: newColumnId }
-                            : newColumnId;
-
+                    taskToMove.column_id = newColumnId;
                     taskToMove.position = newPosition;
                 }
             })
             .addCase(moveTask.fulfilled, (state, action: PayloadAction<Task>) => {
                 state.loading = "fulfilled";
 
-                const index = state.task.findIndex(t => t._id === action.payload._id);
+                const index = state.task.findIndex(t => t.id === action.payload.id);
 
                 if (index !== -1) {
                     state.task[index] = action.payload; // fully replace with server version
                 }
 
                 // Update selectedTask if it's the same task
-                if (state.selectedTask?._id === action.payload._id) {
+                if (state.selectedTask?.id === action.payload.id) {
                     state.selectedTask = action.payload;
                 }
             })
@@ -190,21 +186,16 @@ const taskSlice = createSlice({
             .addCase(updateTask.pending, (state) => { state.loading = "pending"; })
             .addCase(updateTask.fulfilled, (state, action) => {
                 state.loading = "fulfilled";
-                const index = state.task.findIndex(t => t._id === action.payload._id);
+                const index = state.task.findIndex(t => t.id === action.payload.id);
                 if (index !== -1) {
-                    state.task[index] = {
-                        ...state.task[index],
-                        ...action.payload,
-                        board: action.payload.board ?? state.task[index].board,
-                        column: action.payload.column ?? state.task[index].column,
-                    };
+                    state.task[index] = { ...state.task[index], ...action.payload };
                 }
             })
             .addCase(updateTask.rejected, (state, action) => { state.loading = "failed"; state.error = action.payload as string; })
             .addCase(deleteTask.pending, (state) => { state.loading = "pending"; })
             .addCase(deleteTask.fulfilled, (state, action) => {
                 state.loading = "fulfilled";
-                state.task = state.task.filter(t => t._id !== (action.payload as any).taskId);
+                state.task = state.task.filter(t => t.id !== (action.payload as any).taskId);
             })
             .addCase(deleteTask.rejected, (state) => { state.loading = "failed"; })
             .addCase(addComment.pending, (state) => {
@@ -214,7 +205,7 @@ const taskSlice = createSlice({
                 state.loading = "fulfilled";
 
                 // Update the task in the main array
-                const index = state.task.findIndex(t => t._id === action.payload._id);
+                const index = state.task.findIndex(t => t.id === action.payload.id);
                 if (index !== -1) {
                     state.task[index] = {
                         ...state.task[index],
@@ -234,20 +225,9 @@ const taskSlice = createSlice({
             })
             .addCase(toggleTimer.fulfilled, (state, action) => {
                 state.loading = "fulfilled";
-                const index = state.task.findIndex(t => t._id === action.payload._id);
+                const index = state.task.findIndex(t => t.id === action.payload.id);
                 if (index !== -1) {
-                    state.task[index] = {
-                        ...state.task[index],
-                        ...action.payload,
-                        board:
-                            typeof action.payload.board === "object"
-                                ? action.payload.board
-                                : state.task[index].board,
-                        column:
-                            typeof action.payload.column === "object"
-                                ? action.payload.column
-                                : state.task[index].column,
-                    };
+                    state.task[index] = { ...state.task[index], ...action.payload };
                 }
             })
 
@@ -257,10 +237,7 @@ const taskSlice = createSlice({
             })
             .addCase(deleteColumn.fulfilled, (state, action) => {
                 const { columnId } = action.payload;
-                state.task = state.task.filter((t) => {
-                    const taskColId = typeof t.column === 'object' ? t.column._id : t.column;
-                    return taskColId !== columnId;
-                });
+                state.task = state.task.filter((t) => t.column_id !== columnId);
             })
             .addCase(getTasks.pending, (state) => {
                 state.loading = "pending";
@@ -278,7 +255,7 @@ const taskSlice = createSlice({
                 state.loading = "pending";
             })
             .addCase(uploadFiles.fulfilled, (state, action) => {
-                const index = state.task.findIndex(t => t._id === action.payload._id);
+                const index = state.task.findIndex(t => t.id === action.payload.id);
                 if (index !== -1) {
                     state.task[index] = action.payload;
                 }

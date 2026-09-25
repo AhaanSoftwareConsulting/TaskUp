@@ -22,7 +22,8 @@ export const AllTask = () => {
         const overtimeMs = isOvertime ? loggedMs - goalMs : 0;
         return { percent, isOvertime, overtimeHours: msToHours(overtimeMs) };
     };
-
+    const boards = useAppSelector((state) => state.board.boards);
+    const columns=useAppSelector((state)=>state.column.columns)
     if (loading === 'pending') {
         return (
             <div className="flex flex-col items-center justify-center h-64 gap-3">
@@ -86,7 +87,7 @@ export const AllTask = () => {
 
                 return (
                   <tr
-                    key={t._id}
+                    key={t.id}
                     className={`${
                       index % 2 === 0 ? "bg-white" : "bg-gray-100"
                     } hover:bg-gray-200 transition-all`}
@@ -100,7 +101,7 @@ export const AllTask = () => {
 
                         <div className="flex items-center gap-2 mt-1">
                           <span className="text-xs font-semibold capitalize text-gray-600">
-                            {t.board?.name || "No Board"}
+                            {boards.find(b => b.id === t.board_id)?.name}
                           </span>
 
                           <span className="text-gray-300">•</span>
@@ -115,7 +116,7 @@ export const AllTask = () => {
                               ${columnStyle.border}
                             `}
                           >
-                            {t.column?.name || "No Status"}
+                            {columns[t.board_id]?.find(c=>c.id===t.column_id)?.name}
                           </span>
                         </div>
                       </div>
@@ -127,15 +128,15 @@ export const AllTask = () => {
                         {t.assignedTo?.length > 0 ? (
                           t.assignedTo.map((user: any, i: number) => (
                             <div
-                              key={user._id}
+                              key={user.id}
                               className="h-9 w-9 rounded-full border-2 border-white flex items-center justify-center text-white text-xs font-bold shadow-sm"
                               style={{
                                 backgroundColor: getAvatarColor(
-                                  user.name || i
+                                  user.full_name || i
                                 ),
                               }}
                             >
-                              {user.name?.charAt(0).toUpperCase()}
+                              {user.full_name?.charAt(0).toUpperCase()}
                             </div>
                           ))
                         ) : (
@@ -187,8 +188,8 @@ export const AllTask = () => {
                       <div className="flex items-center gap-2">
                         <CalendarBlank size={14} />
                         <span className="text-sm font-medium">
-                          {t.dueDate
-                            ? new Date(t.dueDate).toLocaleDateString(
+                          {t.due_date
+                            ? new Date(t.due_date).toLocaleDateString(
                                 "en-GB",
                                 { day: "2-digit", month: "short" }
                               )
