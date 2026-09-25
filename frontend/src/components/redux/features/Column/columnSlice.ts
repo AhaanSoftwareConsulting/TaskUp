@@ -1,6 +1,6 @@
 import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
 import axiosClient from "../../../api/boardApiClient";
-import type { Column } from "../../../types/allType";
+import type { Column } from "../../../types/board.Types";
 
 interface ColumnState {
     columns: {

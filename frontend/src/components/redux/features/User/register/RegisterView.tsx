@@ -1,6 +1,7 @@
 import { useForm } from "react-hook-form";
 import { useAppDispatch, useAppSelector } from "../../../app/hook";
 import { registerUser } from "./registerSlice";
+import { CaretDownIcon } from "@phosphor-icons/react";
 
 const ROLES = [
   "super-admin",
@@ -80,28 +81,26 @@ export const RegisterView = () => {
           focus:border-black
         "
       />
-
+<div className="relative w-full group">
       <select
         {...register("role", { required: true })}
         className="
-          w-full
-          px-6
-          py-4
-          border
-          border-gray-300
-          rounded-full
-          bg-white
-          focus:outline-none
-          focus:border-black
+         w-full appearance-none px-6 py-4 pr-12 rounded-full border border-gray-300 bg-white text-gray-700 outline-none transition-all duration-200 cursor-pointer 
         "
       >
         <option value="">Select Role</option>
         {ROLES.map((role) => (
-          <option key={role} value={role}>
+          <option key={role} value={role} >
             {role}
           </option>
         ))}
       </select>
+      <CaretDownIcon
+    size={20}
+    weight="bold"
+    className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none transition-transform duration-200 group-focus-within:rotate-180"
+  />
+      </div>
 
       <input
         placeholder="Phone (optional)"

@@ -1,7 +1,10 @@
 const { v4: uuidv4 } = require('uuid');
 const { pool, query } = require('../../config/database');
-
-async function create({ title, description, priority, dueDate, startDate, columnId, boardId, assignedTo = [] }) {
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+function isValidId(id) {
+  return typeof id === 'string' && UUID_RE.test(id);
+}
+async function create({ title, description, priority, due_date, start_date, columnId, boardId, assignedTo = [] }) {
   const id = uuidv4();
   const conn = await pool.getConnection();
   try {
@@ -9,11 +12,11 @@ async function create({ title, description, priority, dueDate, startDate, column
     await conn.execute(
       `INSERT INTO tasks (id, title, description, priority, due_date, start_date, column_id, board_id)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [id, title, description || null, priority || 'Medium', dueDate || null, startDate || null, columnId, boardId]
+      [id, title, description || null, priority || 'Medium', due_date || null, start_date || null, columnId, boardId]
     );
-    for (const userId of assignedTo) {
-      await conn.execute('INSERT IGNORE INTO task_assignees (task_id, user_id) VALUES (?, ?)', [id, userId]);
-    }
+    for (const userId of assignedTo.filter(isValidId)) {
+  await conn.execute('INSERT IGNORE INTO task_assignees (task_id, user_id) VALUES (?, ?)', [id, userId]);
+}
     await conn.commit();
   } catch (err) {
     await conn.rollback();
@@ -120,14 +123,11 @@ async function findByBoards(boardIds) {
   return attachRelations(tasks);
 }
 
+// task.repository.js
 const UPDATABLE_COLUMNS = {
-  title: 'title',
-  description: 'description',
-  priority: 'priority',
-  dueDate: 'due_date',
-  startDate: 'start_date',
-  progress: 'progress',
-  position: 'position',
+  title: 'title', description: 'description', priority: 'priority',
+  due_date: 'due_date', start_date: 'start_date', progress: 'progress', position: 'position',
+  estimated_time: 'estimated_time',   // ← add
 };
 
 async function updateFields(id, updates) {
@@ -263,11 +263,11 @@ async function deleteAttachment(attachmentId) {
 
 async function updateTimeManagement(taskId, fields) {
   const columnMap = {
-    estimatedTime: 'estimated_time',
-    totalLoggedTime: 'total_logged_time',
-    delay: 'time_delay',
-    activeStartTime: 'active_start_time',
-    isRunning: 'is_running',
+    estimated_time: 'estimated_time',
+    total_logged_time: 'total_logged_time',
+    time_delay: 'time_delay',
+    active_start_time: 'active_start_time',
+    is_running: 'is_running',
   };
   const setClauses = [];
   const params = [];
@@ -293,6 +293,23 @@ async function upsertDailyLog(taskId, dateStr, durationDelta) {
      ON DUPLICATE KEY UPDATE duration = duration + VALUES(duration)`,
     [taskId, dateStr, durationDelta]
   );
+}
+async function setAssignees(taskId, userIds) {
+  const validIds = userIds.filter(isValidId);
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+    await conn.execute('DELETE FROM task_assignees WHERE task_id = ?', [taskId]);
+    for (const userId of validIds) {
+      await conn.execute('INSERT IGNORE INTO task_assignees (task_id, user_id) VALUES (?, ?)', [taskId, userId]);
+    }
+    await conn.commit();
+  } catch (err) {
+    await conn.rollback();
+    throw err;
+  } finally {
+    conn.release();
+  }
 }
 
 module.exports = {

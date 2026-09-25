@@ -1,10 +1,12 @@
-import { useContext, useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
     X, ListChecks, UsersIcon, Folder, ArrowSquareOut, Star, CornersOut, DotsThree,
 } from "@phosphor-icons/react"
-import { BoardContext } from '../../context/BoardContext'
-import type { Task } from '../../types/allType'
-import { DeleteBoardModal } from '../../modal/DeleteModal'
+import { useCurrentBoard } from '../../hooks/useCurrentBoard'
+import { useAppDispatch } from '../../redux/app/hook'
+import { deleteTask as deleteTaskThunk } from '../../redux/features/Task/taskSlice'
+import type { Task } from '../../types/board.Types'
+import { DeleteModal } from '../../modal/DeleteModal'
 
 interface TaskDetailsHeaderProps {
     onClose: () => void
@@ -26,15 +28,12 @@ export const TaskDetailsHeader = ({ task, onClose }: TaskDetailsHeaderProps) => 
         return () => window.removeEventListener("mousedown", handaleClickOutside)
     }, [])
 
-    const boardDetails = useContext(BoardContext)
-
-    // --- REMOVED THE "if (!boardDetails) return null" LINE ---
-    // Instead, we safely extract what we need
-    const board = boardDetails?.board
-    const deleteTask = boardDetails?.deleteTask
+    const board = useCurrentBoard()
+const dispatch = useAppDispatch()
+const deleteTask = (taskId: string) => dispatch(deleteTaskThunk({ taskId }))
 
     // Fallback board name if board context is missing
-    const displayBoardName = board?.name || task.board?.name || "Task View"
+    const displayBoardName = board?.name || "Task View"
 
     return (
         <div>
@@ -54,7 +53,7 @@ export const TaskDetailsHeader = ({ task, onClose }: TaskDetailsHeaderProps) => 
                 {/* Right Side */}
                 <div className="flex items-center gap-4">
                     <div className="text-sm text-gray-400">
-                        {task.createdAt ? new Date(task.createdAt).toLocaleDateString("en-US", {
+                        {task.created_at ? new Date(task.created_at).toLocaleDateString("en-US", {
                             day: "2-digit",
                             month: "short"
                         }) : "No Date"}
@@ -70,13 +69,11 @@ export const TaskDetailsHeader = ({ task, onClose }: TaskDetailsHeaderProps) => 
                             <div className="relative" ref={dropdownRef}>
                                 <button
                                     className="p-2 hover:bg-gray-100 rounded text-gray-500"
-                                    onClick={() => setOpenTaskId(openTaskId === task._id ? null : task._id)}
+                                    onClick={() => setOpenTaskId(openTaskId === task.id ? null : task.id)}
                                 >
                                     <DotsThree size={20} weight="bold" />
                                 </button>
-
-                                {/* ... inside the dropdown logic ... */}
-                                {openTaskId === task._id && deleteTask && (
+                                {openTaskId === task.id && (
                                     <div className='absolute right-0 mt-1 w-32 bg-white border rounded shadow-md z-50'>
                                         <button
                                             className='w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-red-50'
@@ -90,13 +87,9 @@ export const TaskDetailsHeader = ({ task, onClose }: TaskDetailsHeaderProps) => 
                                     </div>
                                 )}
                             </div>
-
-                            {/* Actions that don't strictly require context */}
                             <button className="p-2 hover:bg-gray-100 rounded text-gray-500"><Star size={20} /></button>
                             <button className="p-2 hover:bg-gray-100 rounded text-gray-500"><ArrowSquareOut size={20} /></button>
                             <button className="p-2 hover:bg-gray-100 rounded text-gray-500"><CornersOut size={20} /></button>
-
-                            {/* Close Button: Always works regardless of context */}
                             <button
                                 onClick={onClose}
                                 className="p-2 hover:bg-red-50 hover:text-red-600 rounded transition-colors"
@@ -107,8 +100,11 @@ export const TaskDetailsHeader = ({ task, onClose }: TaskDetailsHeaderProps) => 
                     </div>
                 </div>
             </div>
-            <DeleteBoardModal
-                board={taskToDelete}
+             <DeleteModal
+                item={taskToDelete}
+                itemLabel='task'
+                getName={(task)=>task.title}
+                getId={(task)=>task.id}
                 onCancel={() => setTaskToDelete(null)}
                 onConfirm={(id) => {
                     if (deleteTask) deleteTask(id)
