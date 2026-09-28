@@ -24,14 +24,14 @@ const initialState: RegisterState = {
 // Async thunk for registration (No changes needed here as it handles API call)
 export const registerUser = createAsyncThunk<
   User, // return type
-  { name: string; email: string; password: string; role: string; phone?: string }, // argument type
+  { fullName: string; email: string; password: string; role: string; }, // argument type
   { rejectValue: string }
 >(
   'auth/registerUser',
   async (userData, { rejectWithValue }) => {
     try {
       // Backend now sends a cookie for auto-login
-      const res = await axiosClient.post("/api/users/register", userData,  { withCredentials: true });
+      const res = await axiosClient.post("/auth/register", userData,  { withCredentials: true });
       return res.data.user;
     } catch (err: any) {
       return rejectWithValue(err.response?.data?.message || 'Registration failed');

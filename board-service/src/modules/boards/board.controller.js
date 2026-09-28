@@ -1,9 +1,9 @@
 const boardRepo = require('./board.repository');
 const columnRepo = require('../columns/column.repository');
 const taskRepo = require('../tasks/task.repository');
-const { getUsersByIds } = require('../../utils/userClient');
-const { notifyUser } = require('../../utils/notifyClient');
-
+const { getUserById, getUsersByIds } = require('../../utils/userClient');
+const { notifyUser, notifyAddedToBoard } = require('../../utils/notifyClient');
+const templates = require('../../utils/emailTemplates');
 /** Attaches { name, email, role } from the user-service onto owner/members ids. */
 async function withMemberInfo(board) {
   const usersById = await getUsersByIds([board.owner, ...board.members]);
@@ -20,7 +20,13 @@ const createBoard = async (req, res) => {
 
   try {
     const newBoard = await boardRepo.create({ name, owner: ownerId, memberIds: members || [] });
+    const others = (members || []).filter((id) => id && id !== ownerId);
+    await Promise.all(
+      others.map((memberId) => notifyAddedToBoard({ memberId, actorId: ownerId, boardName: name }))
+    );
+
     return res.status(201).json(await withMemberInfo(newBoard));
+
   } catch (error) {
     console.error('Error creating Board', error);
     res.status(500).json({ message: 'server error: failed to create board' });
@@ -50,9 +56,9 @@ const getBoardById = async (req, res) => {
     const columns = await columnRepo.findByBoard(boardId);
     const tasks = await taskRepo.findByBoards([boardId]);
     const tasksByColumn = tasks.reduce((acc, t) => {
-  (acc[t.columnid] = acc[t.columnid] || []).push(t);   // ← "columnid", missing underscore
-  return acc;
-}, {});
+      (acc[t.columnid] = acc[t.columnid] || []).push(t);   // ← "columnid", missing underscore
+      return acc;
+    }, {});
 
     const assigneeIds = tasks.flatMap((t) => t.assignedTo);
     const usersById = await getUsersByIds(assigneeIds);
@@ -86,14 +92,19 @@ const addMemberToBoard = async (req, res) => {
     }
 
     await boardRepo.addMember(boardId, memberId);
+    await notifyAddedToBoard({ memberId, actorId: req.user.id, boardName: board.name });
 
     // Replaces the old post('save') Mongoose hook that called
     // Notification.create() in-process — notifications now live in their
     // own service, so this is an explicit HTTP call after the write commits.
+    const [member, actor] = await Promise.all([getUserById(memberId), getUserById(req.user.id)]);
     await notifyUser({
       userId: memberId,
       title: 'Added to board',
       message: `You were added to the board "${board.name}"`,
+      email: member?.email
+        ? { to: member.email, ...templates.addedToBoard({ boardName: board.name, addedBy: actor?.full_name || 'A manager' }) }
+        : undefined,
     });
 
     const updated = await boardRepo.findById(boardId);
