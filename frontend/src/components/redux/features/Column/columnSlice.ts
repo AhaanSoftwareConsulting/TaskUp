@@ -62,7 +62,7 @@ const columnSlice = createSlice({
     extraReducers: (builder) => {
         builder
             .addCase(addColumn.fulfilled, (state, action) => {
-                const boardId = action.payload.board;
+                const boardId = action.payload.board_id;
                 if (!state.columns[boardId]) state.columns[boardId] = [];
                 state.columns[boardId].push(action.payload);
                 state.loading = false;

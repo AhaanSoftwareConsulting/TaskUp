@@ -10,6 +10,7 @@ import { ForgotPasswordView } from './components/redux/features/User/login/Forgo
 import { ResetPasswordView } from './components/redux/features/User/login/ResetPasswordView';
 import { LoginView } from './components/redux/features/User/login/LoginView';
 import { ToastProvider } from './components/hooks/useToast';
+import { VerifyEmailView } from './components/redux/features/User/login/VerifyEmailView';
 
 
 function App() {
@@ -33,38 +34,41 @@ function App() {
     }
     return (
         <>
-        <ToastProvider>
-            <GlobalTopLoader />
-            <Routes>
-                <Route path="/" element={<Auth>
-                    <LoginView/>
-                </Auth>} />
-                <Route
-                    path="/:role/dashboard/*"
-                    element={
-                        user?.full_name ? (
-                            <AdminDashboard />
-                        ) : (
-                            <Navigate to="/" replace />
-                        )
-                    }
-                />
-                <Route path="/forgot-password" element={
-                    <div className="min-h-screen flex items-center justify-center px-6">
-                        <Auth>
-                            <ForgotPasswordView />
-                        </Auth>
-                        
-                    </div>
-                } />
-                <Route path="/reset-password" element={
-                    <div className="min-h-screen flex items-center justify-center px-6">
-                        <Auth><ResetPasswordView /></Auth>
-                    </div>
-                } />
+            <ToastProvider>
+                <GlobalTopLoader />
+                <Routes>
+                    <Route path="/" element={<Auth>
+                        <LoginView />
+                    </Auth>} />
+                    <Route
+                        path="/:role/dashboard/*"
+                        element={
+                            user?.full_name ? (
+                                <AdminDashboard />
+                            ) : (
+                                <Navigate to="/" replace />
+                            )
+                        }
+                    />
+                    <Route path="/forgot-password" element={
+                        <div className="min-h-screen flex items-center justify-center px-6">
+                            <Auth>
+                                <ForgotPasswordView />
+                            </Auth>
 
-                <Route path="*" element={<Navigate to="/" replace />} />
-            </Routes>
+                        </div>
+                    } />
+                    <Route path="/reset-password" element={
+                        <div className="min-h-screen flex items-center justify-center px-6">
+                            <Auth><ResetPasswordView /></Auth>
+                        </div>
+                    } />
+
+                    <Route path="*" element={<Navigate to="/" replace />} />
+                    <Route path="/verify-email" element={
+                        <div className="min-h-screen flex items-center justify-center px-6"><VerifyEmailView /></div>
+                    } />
+                </Routes>
             </ToastProvider>
         </>
     )

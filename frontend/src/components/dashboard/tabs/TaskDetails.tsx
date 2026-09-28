@@ -70,19 +70,28 @@ const board = useCurrentBoard()
         setEditedTask(prev => ({ ...prev, [field]: value }));
     };
     const handleFieldSave = () => {
-        let finalUpdate: Partial<Task> = { ...editedTask };
-        if (Array.isArray(finalUpdate.assignedTo)) {
-        finalUpdate.assignedTo = finalUpdate.assignedTo.map((u: any) => u.id) as any;
-    }
-    if (finalUpdate.timeManagement) {
-        (finalUpdate as any).estimated_time = finalUpdate.timeManagement.estimated_time;
-        delete finalUpdate.timeManagement;
+    const update: Record<string, any> = {};
+
+    (['title', 'description', 'priority', 'start_date', 'due_date'] as const).forEach((key) => {
+        if (String(editedTask[key] ?? '') !== String(task[key] ?? '')) update[key] = editedTask[key];
+    });
+
+    const newEstimate = editedTask.timeManagement?.estimated_time;
+    if (newEstimate !== undefined && newEstimate !== task.timeManagement?.estimated_time) {
+        update.estimated_time = newEstimate;
     }
 
-       dispatch(updateTask({ taskId: task.id, update: finalUpdate }));
+    const oldIds = (task.assignedTo ?? []).map((u: any) => u.id).sort().join(',');
+    const newIds = (editedTask.assignedTo ?? []).map((u: any) => u.id).sort().join(',');
+    if (oldIds !== newIds) update.assignedTo = (editedTask.assignedTo ?? []).map((u: any) => u.id);
 
+    if (Object.keys(update).length === 0) {
         setActiveField(null);
-    };
+        return;
+    }
+    dispatch(updateTask({ taskId: task.id, update: update as Partial<Task> }));
+    setActiveField(null);
+};
 
 
     const handleFieldCancel = () => {

@@ -27,6 +27,14 @@ module.exports = {
     userServiceUrl: process.env.USER_SERVICE_URL || 'http://localhost:8000',
     notificationServiceUrl: process.env.NOTIFICATION_SERVICE_URL || 'http://localhost:8001',
   },
+    smtp: {
+    host: process.env.SMTP_HOST || 'smtp.mailtrap.io',
+    port: parseInt(process.env.SMTP_PORT || '587', 10),
+    user: process.env.SMTP_USER || '',
+    password: process.env.SMTP_PASSWORD || '',
+    fromEmail: process.env.SMTP_FROM_EMAIL || 'no-reply@example.com',
+    secure: (process.env.SMTP_USE_TLS || 'true') === 'true',
+  },
 
   uploads: {
     baseUrl: process.env.UPLOADS_BASE_URL || 'http://localhost:8002/uploads',

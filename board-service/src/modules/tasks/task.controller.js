@@ -4,9 +4,9 @@ const taskRepo = require('./task.repository');
 const columnRepo = require('../columns/column.repository');
 const boardRepo = require('../boards/board.repository');
 const { getUserById, getUsersByIds } = require('../../utils/userClient');
-const { notifyUser, notifyBoardMembers } = require('../../utils/notifyClient');
+const { notifyUser, notifyBoardMembers, notifyAssigned } = require('../../utils/notifyClient');
 const config = require('../../config/config');
-
+const templates = require('../../utils/emailTemplates');
 /** Enrich the string user-ids on a task (assignedTo, comments.user_id, activityLog.user_id, attachments.uploaded_by) with display info. */
 async function withUserInfo(task) {
   if (!task) return task;
@@ -66,12 +66,12 @@ const createTask = async (req, res) => {
     await taskRepo.addActivityLog(newTask.id, { userId: req.user.id, action: 'Task created' });
 
     if (assignedTo && assignedTo.length) {
-      await Promise.all(
-        assignedTo.map((userId) =>
-          notifyUser({ userId, title: 'New task assigned', message: `You were assigned to "${title}"` })
-        )
-      );
-    }
+  await Promise.all(
+    assignedTo
+      .filter((id) => String(id) !== String(req.user.id))
+      .map((id) => notifyAssigned({ assigneeId: id, actorId: req.user.id, taskTitle: title, boardName: board.name }))
+  );
+}
 
     const full = await taskRepo.findFull(newTask.id);
     res.status(201).json(await withUserInfo(full));
@@ -104,12 +104,42 @@ const moveTask = async (req, res) => {
       await taskRepo.setColumn(taskId, newColumnId);
 
       const board = await boardRepo.findById(task.board_id);
-      await notifyBoardMembers({
-        memberIds: board ? board.members : [],
-        actorId: req.user.id,
-        title: 'Task moved',
-        message: `"${task.title}" moved from "${oldColumnTitle}" to "${newCol.name}"`,
-      });
+      // await notifyBoardMembers({
+      //   memberIds: board ? board.members : [],
+      //   actorId: req.user.id,
+      //   title: 'Task moved',
+      //   message: `"${task.title}" moved from "${oldColumnTitle}" to "${newCol.name}"`,
+      // });
+
+      
+    const [actor, assignees] = await Promise.all([
+      getUserById(req.user.id),
+      getUsersByIds((await taskRepo.findFull(taskId)).assignedTo),
+    ]);
+   
+
+    await Promise.all(
+      Object.values(assignees)
+        .filter((u) => u.id !== req.user.id && u.email)
+        .map((u) =>
+          notifyUser({
+            userId: u.id,
+            title: 'Task moved',
+            message: `"${task.title}" moved from "${oldColumnTitle}" to "${newCol.name}"`,
+            email: {
+              to: u.email,
+              ...templates.statusChanged({
+                taskTitle: task.title,
+                boardName: board?.name,
+                changedBy: actor?.full_name || 'Someone',
+                from: oldColumnTitle,
+                to: newCol.name,
+              }),
+            },
+          })
+        )
+    );
+
     } else {
       await taskRepo.addActivityLog(taskId, {
         userId: req.user.id,
@@ -144,13 +174,19 @@ const UPDATE_FIELD_TO_COLUMN = {
   estimated_time: 'estimated_time',   // ← add, and note field names are now snake_case matching the rest of the file
 };
 
-/**
- * Diffs the requested updates against the current task and appends
- * activityLog entries — this used to live in a Mongoose pre('save') hook
- * on the Task model. Moved here explicitly since resolving a user's name
- * for the "assigned to X" log line is an async HTTP call now, which
- * doesn't fit cleanly in a Mongoose-style hook anyway.
- */
+function toDay(value) {
+  if (!value) return '';
+  if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}/.test(value)) return value.slice(0, 10);
+  const d = new Date(value);
+  return isNaN(d) ? String(value) : d.toISOString().slice(0, 10);
+}
+
+function toComparable(key, value) {
+  if (value === null || value === undefined || value === '') return '';
+  if (key === 'due_date' || key === 'start_date') return toDay(value);
+  if (['estimated_time', 'progress', 'position'].includes(key)) return String(Number(value));
+  return String(value);
+}
 const updateTask = async (req, res) => {
   try {
     const { taskId } = req.params;
@@ -164,7 +200,7 @@ const updateTask = async (req, res) => {
       const column = UPDATE_FIELD_TO_COLUMN[key] || key;
       const oldValue = task[column];
       const newValue = updates[key];
-      if (String(oldValue ?? '') === String(newValue ?? '')) continue;
+      if (toComparable(key, oldValue) === toComparable(key, newValue)) continue;
 
       let actionText = `updated the ${key}`;
       if (key === 'priority') {
@@ -189,12 +225,13 @@ const updateTask = async (req, res) => {
         const user = await getUserById(addedId);
         await taskRepo.addActivityLog(taskId, {
           userId: req.user.id,
-          action: `assigned task to ${user?.name || 'a user'}`,
+          action: `assigned task to ${user?.full_name || 'a user'}`,
           field: 'assignedTo',
           oldValue: oldIds,
           newValue: newIds,
         });
-        await notifyUser({ userId: addedId, title: 'Task assigned', message: `You were assigned to "${task.title}"` });
+        const taskBoard = await boardRepo.findById(task.board_id);
+await notifyAssigned({ assigneeId: addedId, actorId: req.user.id, taskTitle: task.title, boardName: taskBoard?.name });
       }
       await taskRepo.setAssignees(taskId, newIds);
     }
@@ -242,11 +279,11 @@ const addTaskComment = async (req, res) => {
 
     const commentAttachments = req.files
       ? req.files.map((file) => ({
-          fileName: file.originalname,
-          fileUrl: `${config.uploads.baseUrl}/${file.filename}`,
-          fileType: file.mimetype,
-          uploadedBy: userId,
-        }))
+        fileName: file.originalname,
+        fileUrl: `${config.uploads.baseUrl}/${file.filename}`,
+        fileType: file.mimetype,
+        uploadedBy: userId,
+      }))
       : [];
 
     await taskRepo.addComment(taskId, { userId, text: text || '', attachments: commentAttachments });
