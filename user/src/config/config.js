@@ -43,11 +43,11 @@ module.exports = {
   },
 
   frontend: {
-    resetPasswordUrl: process.env.FRONTEND_RESET_PASSWORD_URL || 'http://localhost:3000/reset-password',
-    verifyEmailUrl: process.env.FRONTEND_VERIFY_EMAIL_URL || 'http://localhost:3000/verify-email',
+    resetPasswordUrl: process.env.FRONTEND_RESET_PASSWORD_URL ,
+    verifyEmailUrl: process.env.FRONTEND_VERIFY_EMAIL_URL ,
   },
 
   cors: {
-    allowedOrigins: (process.env.ALLOWED_ORIGINS || 'http://localhost:3000').split(','),
+    allowedOrigins: (process.env.ALLOWED_ORIGINS ).split(','),
   },
 };
