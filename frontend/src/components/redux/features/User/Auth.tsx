@@ -1,6 +1,6 @@
-import {LoginView} from "./login/LoginView";
+
 import logoImg from "../../../../assets/pmt.png";
-import { Children, type ReactNode } from "react";
+import { type ReactNode } from "react";
 
 interface AuthProps{
   children:ReactNode;
