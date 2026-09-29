@@ -24,8 +24,8 @@ module.exports = {
 
   // Other services this one talks to over HTTP instead of sharing a DB.
   services: {
-    userServiceUrl: process.env.USER_SERVICE_URL || 'http://localhost:8000',
-    notificationServiceUrl: process.env.NOTIFICATION_SERVICE_URL || 'http://localhost:8001',
+    userServiceUrl: process.env.USER_SERVICE_URL,
+    notificationServiceUrl: process.env.NOTIFICATION_SERVICE_URL,
   },
     smtp: {
     host: process.env.SMTP_HOST || 'smtp.mailtrap.io',
