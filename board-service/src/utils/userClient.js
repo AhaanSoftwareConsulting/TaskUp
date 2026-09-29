@@ -9,6 +9,7 @@ async function getUserById(id) {
   const key = String(id);
 
   if (userCache.has(key)) {
+    console.log("USER CACHE HIT:", key, userCache.get(key));
     return userCache.get(key);
   }
 
@@ -20,12 +21,16 @@ async function getUserById(id) {
       }
     );
 
+    console.log("USER SERVICE RAW RESPONSE:", data);
+
     const user = {
       id: key,
       full_name: data.full_name,
       email: data.email,
       role: data.role,
     };
+
+    console.log("USER CLIENT MAPPED USER:", user);
 
     userCache.set(key, user);
 
@@ -44,6 +49,7 @@ async function getUserById(id) {
     };
   }
 }
+
 
 async function getUsersByIds(ids = []) {
   const uniqueIds = [
