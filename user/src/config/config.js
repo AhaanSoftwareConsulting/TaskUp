@@ -17,7 +17,7 @@ module.exports = {
   },
 
   jwt: {
-    secret: process.env.JWT_SECRET_KEY || 'CHANGE_ME_IN_PRODUCTION',
+    secret: process.env.JWT_SECRET_KEY,
     accessExpiresMinutes: parseInt(process.env.ACCESS_TOKEN_EXPIRE_MINUTES || '15', 10),
     refreshExpiresDays: parseInt(process.env.REFRESH_TOKEN_EXPIRE_DAYS || '7', 10),
   },
