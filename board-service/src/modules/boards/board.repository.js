@@ -3,7 +3,13 @@ const { pool, query } = require('../../config/database');
 
 async function create({ name, owner, memberIds = [] }) {
   const id = uuidv4();
-  const allMembers = [...new Set([owner, ...memberIds])];
+  const allMembers = [
+  ...new Set(
+    [owner, ...(Array.isArray(memberIds) ? memberIds : [])]
+      .filter((id) => id !== null && id !== undefined && id !== '')
+      .map(String)
+  ),
+];
 
   const conn = await pool.getConnection();
   try {
