@@ -19,7 +19,7 @@ module.exports = {
   // (jwt.sign({ sub, type: 'access', role }, JWT_SECRET_KEY, ...)).
   // Board service only *verifies* tokens here — it never issues its own.
   jwt: {
-    secret: process.env.JWT_SECRET_KEY || 'CHANGE_ME_IN_PRODUCTION',
+    secret: process.env.JWT_SECRET_KEY,
   },
 
   // Other services this one talks to over HTTP instead of sharing a DB.
@@ -41,6 +41,8 @@ module.exports = {
   },
 
   cors: {
-    allowedOrigins: (process.env.ALLOWED_ORIGINS || 'http://localhost:5173').split(','),
-  },
+  allowedOrigins: (process.env.ALLOWED_ORIGINS || 'http://localhost:5173')
+    .split(',')
+    .map(origin => origin.trim()),
+},
 };
