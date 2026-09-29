@@ -47,7 +47,9 @@ module.exports = {
     verifyEmailUrl: process.env.FRONTEND_VERIFY_EMAIL_URL ,
   },
 
-  cors: {
-    allowedOrigins: (process.env.ALLOWED_ORIGINS ).split(','),
-  },
+cors: {
+  allowedOrigins: (process.env.ALLOWED_ORIGINS || 'http://localhost:5173')
+    .split(',')
+    .map(origin => origin.trim()),
+},
 };
