@@ -12,13 +12,26 @@ async function getUserById(id) {
     return userCache.get(key);
   }
 
+  const url =
+    `${config.services.userServiceUrl}/internal/users/${key}`;
+
+  console.log("========== USER SERVICE CALL ==========");
+  console.log("BASE URL:", config.services.userServiceUrl);
+  console.log("FULL URL:", url);
+  console.log("USER ID:", key);
+
   try {
-    const { data } = await axios.get(
-      `${config.services.userServiceUrl}/internal/users/${key}`,
-      {
-        timeout: 3000,
-      }
-    );
+    const { data } = await axios.get(url, {
+      timeout: 5000,
+    });
+
+    console.log("USER SERVICE STATUS: 200");
+    console.log("USER SERVICE DATA:", {
+      id: data.id,
+      full_name: data.full_name,
+      email: data.email,
+      role: data.role,
+    });
 
     const user = {
       id: key,
@@ -31,10 +44,14 @@ async function getUserById(id) {
 
     return user;
   } catch (error) {
-    console.error(
-      `userClient: failed to fetch user ${key}:`,
-      error.message
-    );
+    console.error("========== USER SERVICE ERROR ==========");
+    console.error({
+      url,
+      message: error.message,
+      code: error.code,
+      status: error.response?.status,
+      response: error.response?.data,
+    });
 
     return {
       id: key,
@@ -44,6 +61,7 @@ async function getUserById(id) {
     };
   }
 }
+
 
 async function getUsersByIds(ids = []) {
   const uniqueIds = [
