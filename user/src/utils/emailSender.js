@@ -1,25 +1,48 @@
 /**
- * Minimal SMTP email sender via nodemailer. Swap for SES/SendGrid/Postmark in
- * production, and ideally call it from a background job queue rather than
- * inline in the request so email latency never blocks the API response.
+ * Sends via the Hostinger Mail API (official SDK), not raw SMTP —
+ * SMTP auth from this host was failing (535 error). The API sends through
+ * an actual Hostinger mailbox, identified by its resourceId, rather than
+ * an arbitrary "from" address: getCurrentAccount() looks up the mailbox
+ * matching config.smtp.fromEmail once, then every send reuses that id.
  */
-const nodemailer = require('nodemailer');
+const { AccountApi, SendApi, Configuration } = require('hostinger-mail-api-sdk');
 const config = require('../config/config');
 
-const transporter = nodemailer.createTransport({
-  host: config.smtp.host,
-  port: config.smtp.port,
-  secure: config.smtp.port === 465,
-  auth: config.smtp.user ? { user: config.smtp.user, pass: config.smtp.password } : undefined,
-});
+const configuration = new Configuration({ accessToken: config.hostingerMailApi.token });
+const accountApi = new AccountApi(configuration);
+const sendApi = new SendApi(configuration);
+
+let cachedResourceId = null;
+
+async function getMailboxResourceId() {
+  if (cachedResourceId) return cachedResourceId;
+
+  const { data } = await accountApi.getCurrentAccount();
+  const mailbox = data.data.mailboxes.find(
+    (m) => m.address.toLowerCase() === config.smtp.fromEmail.toLowerCase()
+  );
+  if (!mailbox) {
+    throw new Error(
+      `No Hostinger mailbox found matching SMTP_FROM_EMAIL="${config.smtp.fromEmail}". ` +
+      `Check the address exists in hPanel and the API token has access to it.`
+    );
+  }
+  cachedResourceId = mailbox.resourceId;
+  return cachedResourceId;
+}
 
 async function sendEmail(toEmail, subject, htmlBody) {
-  await transporter.sendMail({
-    from: config.smtp.fromEmail,
-    to: toEmail,
+  if (config.app.debug) {
+    console.log(`DEV email to ${toEmail}: ${subject}`);
+    return;
+  }
+  const resourceId = await getMailboxResourceId();
+  await sendApi.sendEmail(resourceId, {
+    to: [toEmail],
     subject,
     html: htmlBody,
   });
+  console.log(`✅ Email sent to ${toEmail} via mailbox ${resourceId}`);
 }
 
 async function sendPasswordResetEmail(toEmail, resetLink) {

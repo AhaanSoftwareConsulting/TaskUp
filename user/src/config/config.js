@@ -46,6 +46,9 @@ module.exports = {
     resetPasswordUrl: process.env.FRONTEND_RESET_PASSWORD_URL ,
     verifyEmailUrl: process.env.FRONTEND_VERIFY_EMAIL_URL ,
   },
+hostingerMailApi: {
+  token: process.env.HOSTINGER_MAIL_API_TOKEN || '',
+},
 
 cors: {
   allowedOrigins: (process.env.ALLOWED_ORIGINS || 'http://localhost:5173')
