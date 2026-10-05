@@ -10,13 +10,18 @@ import {
 } from '@phosphor-icons/react';
 import { getAvatarColor } from "../../utils/avatarColor";
 import { getColumnColor } from "../../utils/columnColors"; 
+import { useState } from 'react';
+import type { Task } from '../../types/board.Types';
+import { TaskTimePanel } from '../Task/TaskTimePanel';
 
 export const AllTask = () => {
+
+  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
     const { task: tasks, loading } = useAppSelector((state) => state.task);
     const msToHours = (ms: number = 0) => (ms / 3600000).toFixed(1);
     const calculateProgress = (timeManagement: any) => {
-        const goalMs = (timeManagement?.estimatedTime || 0) * 3600000;
-        const loggedMs = timeManagement?.totalLoggedTime || 0;
+        const goalMs = (timeManagement?.estimated_time || 0) * 3600000;
+        const loggedMs = timeManagement?.total_logged_time  || 0;
         const percent = goalMs > 0 ? Math.min((loggedMs / goalMs) * 100, 100) : 0;
         const isOvertime = loggedMs > goalMs && goalMs > 0;
         const overtimeMs = isOvertime ? loggedMs - goalMs : 0;
@@ -88,6 +93,7 @@ export const AllTask = () => {
                 return (
                   <tr
                     key={t.id}
+                     onClick={() => setSelectedTask(t)}
                     className={`${
                       index % 2 === 0 ? "bg-white" : "bg-gray-100"
                     } hover:bg-gray-200 transition-all`}
@@ -159,9 +165,9 @@ export const AllTask = () => {
                           <span className="flex items-center gap-1">
                             <Hourglass size={12} />
                             {msToHours(
-                              t.timeManagement?.totalLoggedTime
+                              t.timeManagement?.total_logged_time 
                             )}h /{" "}
-                            {t.timeManagement?.estimatedTime || 0}h
+                            {t.timeManagement?.estimated_time || 0}h
                           </span>
 
                           {isOvertime && (
@@ -204,7 +210,7 @@ export const AllTask = () => {
           </table>
         </div>
       </div>
-            
+            <TaskTimePanel task={selectedTask} onClose={() => setSelectedTask(null)} />
         </div>
     );
 };

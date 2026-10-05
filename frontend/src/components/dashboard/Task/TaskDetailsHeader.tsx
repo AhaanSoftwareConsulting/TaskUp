@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import {
-    X, ListChecks, UsersIcon, Folder, ArrowSquareOut, Star, CornersOut, DotsThree,
+    X, ListChecks, UsersIcon, Folder, ArrowSquareOut, Star,  DotsThree,
 } from "@phosphor-icons/react"
 import { useCurrentBoard } from '../../hooks/useCurrentBoard'
-import { useAppDispatch } from '../../redux/app/hook'
+import { useAppDispatch, useAppSelector } from '../../redux/app/hook'
 import { deleteTask as deleteTaskThunk } from '../../redux/features/Task/taskSlice'
 import type { Task } from '../../types/board.Types'
 import { DeleteModal } from '../../modal/DeleteModal'
@@ -16,8 +16,10 @@ interface TaskDetailsHeaderProps {
 export const TaskDetailsHeader = ({ task, onClose }: TaskDetailsHeaderProps) => {
     const [openTaskId, setOpenTaskId] = useState<string | null>(null)
     const [taskToDelete, setTaskToDelete] = useState<Task | null>(null)
+    const [copied, setCopied] = useState(false);
     const dropdownRef = useRef<HTMLDivElement | null>(null)
-
+    const user = useAppSelector(state => state.login.user);
+    const role = user?.role;
     useEffect(() => {
         const handaleClickOutside = (e: any) => {
             if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
@@ -29,8 +31,20 @@ export const TaskDetailsHeader = ({ task, onClose }: TaskDetailsHeaderProps) => 
     }, [])
 
     const board = useCurrentBoard()
-const dispatch = useAppDispatch()
-const deleteTask = (taskId: string) => dispatch(deleteTaskThunk({ taskId }))
+    const dispatch = useAppDispatch()
+    const deleteTask = (taskId: string) => dispatch(deleteTaskThunk({ taskId }))
+
+    const handleShare = async () => {
+        const url = `${window.location.origin}/${role}/dashboard/tasks/${task.id}`;
+        await navigator.clipboard.writeText(url);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+    };
+
+    const handleOpenNewTab = () => {
+        const url = `${window.location.origin}${window.location.pathname.replace(/\/[^/]+$/, '')}/tasks/${task.id}`;
+        window.open(url, '_blank', 'noopener,noreferrer');
+    };
 
     // Fallback board name if board context is missing
     const displayBoardName = board?.name || "Task View"
@@ -60,9 +74,9 @@ const deleteTask = (taskId: string) => dispatch(deleteTaskThunk({ taskId }))
                     </div>
 
                     <div className="flex items-center gap-1">
-                        <button className="flex items-center gap-1.5 px-3 py-1.5 hover:bg-gray-100 rounded-md text-gray-600 text-sm font-medium">
+                        <button onClick={handleShare} className="flex items-center gap-1.5 px-3 py-1.5 hover:bg-gray-100 rounded-md text-gray-600 text-sm font-medium">
                             <UsersIcon size={18} />
-                            Share
+                            {copied ? 'Copied!' : 'Share'}
                         </button>
 
                         <div className="flex items-center gap-0.5 ml-2 border-l pl-2 border-gray-200">
@@ -88,8 +102,7 @@ const deleteTask = (taskId: string) => dispatch(deleteTaskThunk({ taskId }))
                                 )}
                             </div>
                             <button className="p-2 hover:bg-gray-100 rounded text-gray-500"><Star size={20} /></button>
-                            <button className="p-2 hover:bg-gray-100 rounded text-gray-500"><ArrowSquareOut size={20} /></button>
-                            <button className="p-2 hover:bg-gray-100 rounded text-gray-500"><CornersOut size={20} /></button>
+                            <button onClick={handleOpenNewTab} className="p-2 hover:bg-gray-100 rounded text-gray-500"><ArrowSquareOut size={20} /></button>
                             <button
                                 onClick={onClose}
                                 className="p-2 hover:bg-red-50 hover:text-red-600 rounded transition-colors"
@@ -100,11 +113,11 @@ const deleteTask = (taskId: string) => dispatch(deleteTaskThunk({ taskId }))
                     </div>
                 </div>
             </div>
-             <DeleteModal
+            <DeleteModal
                 item={taskToDelete}
                 itemLabel='task'
-                getName={(task)=>task.title}
-                getId={(task)=>task.id}
+                getName={(task) => task.title}
+                getId={(task) => task.id}
                 onCancel={() => setTaskToDelete(null)}
                 onConfirm={(id) => {
                     if (deleteTask) deleteTask(id)

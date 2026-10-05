@@ -6,11 +6,11 @@ import {
   markAsRead,
 } from "../redux/features/notifications/notificationSlice";
 import {
-  MagnifyingGlass,
   Bell,
 } from "@phosphor-icons/react";
 
 import { getAvatarColor } from "../utils/avatarColor"; // ✅ IMPORT FROM UTILS
+import { SearchBar } from "./SearchBar";
 
 export const Topbar = () => {
   const dispatch = useAppDispatch();
@@ -97,12 +97,7 @@ export const Topbar = () => {
 
       {/* ================= SEARCH ================= */}
       <div className="flex items-center gap-3 w-[420px] max-w-full">
-        <MagnifyingGlass size={18} className="text-gray-500" />
-        <input
-          type="text"
-          placeholder="Search boards, tasks, docs..."
-          className="w-full bg-transparent text-sm text-gray-800 placeholder:text-gray-400 outline-none"
-        />
+       <SearchBar />
       </div>
 
       {/* ================= RIGHT SIDE ================= */}

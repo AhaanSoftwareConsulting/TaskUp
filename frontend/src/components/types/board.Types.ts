@@ -31,6 +31,7 @@ export type TimeManagement = {
   dailyLogs: DailyLog[];
   active_start_time: string | null;
   is_running: boolean;
+  byUser: { user: User; duration: number }[];
 };
 
 export type Comment = {
