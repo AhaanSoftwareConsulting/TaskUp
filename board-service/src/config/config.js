@@ -45,4 +45,8 @@ module.exports = {
     .split(',')
     .map(origin => origin.trim()),
 },
+// config.js — add
+frontend: {
+  url: process.env.FRONTEND_URL || 'http://localhost:5173',
+},
 };
