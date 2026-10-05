@@ -1,8 +1,6 @@
 // components/dashboard/Task/TaskTimePanel.tsx
-import { useEffect, useState } from "react";
-import { X, Clock } from "@phosphor-icons/react";
+import { Clock } from "@phosphor-icons/react";
 import type { Task } from "../../types/board.Types";
-import { ActivityDetails } from "./ActivityDetails";
 
 interface Props {
   task: Task | null;
@@ -10,12 +8,6 @@ interface Props {
 }
 
 export const TaskTimePanel = ({ task, onClose }: Props) => {
-  const [visible, setVisible] = useState(false);
-
-  useEffect(() => {
-    setVisible(!!task);
-  }, [task]);
-
   if (!task) return null;
 
   const msToHours = (ms: number = 0) => (ms / 3600000).toFixed(1);
@@ -23,22 +15,18 @@ export const TaskTimePanel = ({ task, onClose }: Props) => {
   const totalMs = byUser.reduce((sum, e) => sum + e.duration, 0);
 
   return (
-    <div className="fixed inset-0 z-[90]">
-      <div className="absolute inset-0 bg-black/30" onClick={onClose} />
-      <div
-        className={`absolute right-0 top-0 h-full w-full sm:w-[35%] bg-white shadow-2xl transition-transform duration-300 ${
-          visible ? "translate-x-0" : "translate-x-full"
-        } flex flex-col`}
-      >
-        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-          <h3 className="font-bold text-gray-800 truncate pr-4">{task.title}</h3>
-          <button onClick={onClose} className="p-1.5 hover:bg-gray-100 rounded-full">
-            <X size={18} />
-          </button>
+    <div className="w-[35%] border-l border-gray-100 p-6 overflow-y-auto bg-gray-50/40 flex flex-col">
+      <button onClick={onClose} className="text-xs text-gray-400 hover:text-black mb-4 text-left">
+        ✕ Close
+      </button>
+
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 flex-1 flex flex-col">
+        <div className="flex items-center justify-between pb-4 mb-6 border-b border-gray-100">
+          <h2 className="text-lg font-bold text-gray-900 truncate pr-4">{task.title}</h2>
         </div>
 
-        <div className="flex-1 overflow-y-auto">
-          <div className="p-5 border-b border-gray-50">
+        <div className="flex-1 overflow-y-auto space-y-6">
+          <div className="p-4 rounded-xl bg-gray-50 border border-gray-100">
             <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 mb-4">
               <Clock size={14} weight="bold" /> Time by Member
             </h4>
@@ -64,8 +52,6 @@ export const TaskTimePanel = ({ task, onClose }: Props) => {
               </div>
             )}
           </div>
-
-          <ActivityDetails taskId={task.id} />
         </div>
       </div>
     </div>

@@ -5,6 +5,7 @@ import { useAppDispatch, useAppSelector } from "../../../app/hook";
 import { loginUsers } from "./loginSlice";
 import { slugify } from "../../../../hooks/slugify";
 import { useToast } from "../../../../hooks/useToast";
+import { PasswordInput } from "../../../../modal/PasswordInput";
 
 interface LoginForm {
   email: string;
@@ -54,12 +55,12 @@ export const LoginView = () => {
           className="w-full px-6 py-4 rounded-full border bg-blue-50"
         />
 
-        <input
-          type="password"
-          placeholder="Password"
-          {...register("password", { required: true })}
-          className="w-full px-6 py-4 rounded-full border bg-blue-50"
-        />
+        <PasswordInput
+  placeholder="Password"
+  name="password"
+  register={register}
+/>
+
 
         {error && (
           <p className="text-red-500 text-sm text-center">
