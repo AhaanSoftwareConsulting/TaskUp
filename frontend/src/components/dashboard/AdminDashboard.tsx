@@ -8,6 +8,7 @@ import { TasksPageWrapper } from './TaskPagewrapper'
 import { useState } from 'react'
 import { BoardQueryWrapper } from '../hooks/BoardQueryWrapper'
 import { Teams } from './tabs/Team'
+import { TaskPage } from './pages/TaskPage'
 
  
 export const AdminDashboard = () => {
@@ -44,6 +45,7 @@ export const AdminDashboard = () => {
           <Route path="tasks" element={<TasksPageWrapper />} />
           <Route path="*" element={<Navigate to={`/`} replace />} />
           <Route path="teams" element={<Teams />} />
+          <Route path="tasks/:taskId" element={<TaskPage />} />
         </Routes>
       </div>
     </div>

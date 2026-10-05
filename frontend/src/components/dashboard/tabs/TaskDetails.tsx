@@ -11,7 +11,8 @@ import { updateTask } from "../../redux/features/Task/taskSlice"
 import { useCurrentBoard } from "../../hooks/useCurrentBoard"
 import { ActivityDetails } from "../Task/ActivityDetails"
 import { AttachmentSection } from "../Task/AttachMentSection"
-
+import { moveTask as moveTaskThunk } from "../../redux/features/Task/taskSlice";
+import { useBoardColumns } from "../../hooks/useBoardColumns";
 interface TaskDetailsProps {
     task: Task,
     onClose: () => void,
@@ -65,33 +66,38 @@ export const TaskDetails = ({ task, status, onClose }: TaskDetailsProps) => {
     const [editedTask, setEditedTask] = useState<Partial<Task>>({ ...task });
     const [isdropdown, setIsdropdown] = useState(false);
     const dispatch = useAppDispatch()
-const board = useCurrentBoard()
+    const board = useCurrentBoard()
+    const columns = useBoardColumns(task.board_id); // array of { id, name }
+
+    const handleColumnChange = (newColumnId: string) => {
+        dispatch(moveTaskThunk({ taskId: task.id, newColumnId, newPosition: 0 }));
+    };
     const handleChange = (field: keyof Task, value: any) => {
         setEditedTask(prev => ({ ...prev, [field]: value }));
     };
     const handleFieldSave = () => {
-    const update: Record<string, any> = {};
+        const update: Record<string, any> = {};
 
-    (['title', 'description', 'priority', 'start_date', 'due_date'] as const).forEach((key) => {
-        if (String(editedTask[key] ?? '') !== String(task[key] ?? '')) update[key] = editedTask[key];
-    });
+        (['title', 'description', 'priority', 'start_date', 'due_date'] as const).forEach((key) => {
+            if (String(editedTask[key] ?? '') !== String(task[key] ?? '')) update[key] = editedTask[key];
+        });
 
-    const newEstimate = editedTask.timeManagement?.estimated_time;
-    if (newEstimate !== undefined && newEstimate !== task.timeManagement?.estimated_time) {
-        update.estimated_time = newEstimate;
-    }
+        const newEstimate = editedTask.timeManagement?.estimated_time;
+        if (newEstimate !== undefined && newEstimate !== task.timeManagement?.estimated_time) {
+            update.estimated_time = newEstimate;
+        }
 
-    const oldIds = (task.assignedTo ?? []).map((u: any) => u.id).sort().join(',');
-    const newIds = (editedTask.assignedTo ?? []).map((u: any) => u.id).sort().join(',');
-    if (oldIds !== newIds) update.assignedTo = (editedTask.assignedTo ?? []).map((u: any) => u.id);
+        const oldIds = (task.assignedTo ?? []).map((u: any) => u.id).sort().join(',');
+        const newIds = (editedTask.assignedTo ?? []).map((u: any) => u.id).sort().join(',');
+        if (oldIds !== newIds) update.assignedTo = (editedTask.assignedTo ?? []).map((u: any) => u.id);
 
-    if (Object.keys(update).length === 0) {
+        if (Object.keys(update).length === 0) {
+            setActiveField(null);
+            return;
+        }
+        dispatch(updateTask({ taskId: task.id, update: update as Partial<Task> }));
         setActiveField(null);
-        return;
-    }
-    dispatch(updateTask({ taskId: task.id, update: update as Partial<Task> }));
-    setActiveField(null);
-};
+    };
 
 
     const handleFieldCancel = () => {
@@ -188,12 +194,24 @@ const board = useCurrentBoard()
                                         <div className="w-2 h-2 rounded-full bg-gray-400" />
                                     </div>
                                 </div>
-                                <div className="flex flex-col">
-                                    <p className="text-[10px] font-bold text-gray-400 tracking-wider uppercase">Status</p>
-                                    <span className="mt-1 w-fit bg-emerald-500 text-white text-[10px] font-black px-2.5 py-0.5 rounded uppercase tracking-widest">
-                                        {status || 'OPEN'}
-                                    </span>
-                                </div>
+                                <EditableRow
+                                    field="column" label="Status" icon={<Target size={20} />}
+                                    activeField={activeField} setActiveField={setActiveField}
+                                    handleFieldSave={() => setActiveField(null)} handleFieldCancel={handleFieldCancel}
+                                    editComponent={
+                                        <select
+                                            value={task.column_id}
+                                            onChange={(e) => handleColumnChange(e.target.value)}
+                                            className="text-xs border rounded px-2 py-1"
+                                        >
+                                            {columns.map((c) => (
+                                                <option key={c.id} value={c.id}>{c.name}</option>
+                                            ))}
+                                        </select>
+                                    }
+                                >
+                                    <span className="text-sm font-medium">{status || 'OPEN'}</span>
+                                </EditableRow>
                             </div>
 
                             <EditableRow
@@ -342,7 +360,7 @@ const board = useCurrentBoard()
                                     <div className="flex flex-col">
                                         <p className="text-[10px] font-bold text-gray-400 tracking-wider uppercase">Total Worked</p>
                                         <p className="text-lg font-black text-emerald-600">
-                                            {msToHours(loggedMs)} <span className="text-xs font-normal text-slate-400 uppercase ml-1">hrs</span>
+                                             {msToHours(loggedMs)} <span className="text-xs font-normal text-slate-400 uppercase ml-1">hrs</span>
                                         </p>
                                     </div>
                                 </div>
@@ -438,7 +456,7 @@ const board = useCurrentBoard()
                                 <div className="space-y-3">
                                     <textarea
                                         className="w-full p-4 border border-blue-100 rounded-xl focus:ring-4 focus:ring-blue-50 outline-none transition-all text-sm leading-relaxed"
-                                        rows={5} value={editedTask.description?? ''} onChange={(e) => handleChange('description', e.target.value)}
+                                        rows={5} value={editedTask.description ?? ''} onChange={(e) => handleChange('description', e.target.value)}
                                         placeholder="Add a detailed description..."
                                     />
                                     <div className="flex justify-end gap-2">

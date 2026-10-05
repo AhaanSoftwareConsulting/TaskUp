@@ -286,12 +286,27 @@ async function getDailyLogs(taskId) {
   return query('SELECT log_date, duration FROM task_daily_logs WHERE task_id = ? ORDER BY log_date', [taskId]);
 }
 
-async function upsertDailyLog(taskId, dateStr, durationDelta) {
+async function upsertDailyLog(taskId, userId, dateStr, durationDelta) {
   await query(
-    `INSERT INTO task_daily_logs (task_id, log_date, duration)
-     VALUES (?, ?, ?)
+    `INSERT INTO task_daily_logs (task_id, user_id, log_date, duration)
+     VALUES (?, ?, ?, ?)
      ON DUPLICATE KEY UPDATE duration = duration + VALUES(duration)`,
-    [taskId, dateStr, durationDelta]
+    [taskId, userId, dateStr, durationDelta]
+  );
+}
+
+async function getDailyLogs(taskId) {
+  return query('SELECT user_id, log_date, duration FROM task_daily_logs WHERE task_id = ? ORDER BY log_date', [taskId]);
+}
+
+/** Per-user total time logged on a task — the "who worked how much" breakdown. */
+async function getTimeByUser(taskId) {
+  return query(
+    `SELECT user_id, SUM(duration) AS total_duration
+     FROM task_daily_logs
+     WHERE task_id = ?
+     GROUP BY user_id`,
+    [taskId]
   );
 }
 async function setAssignees(taskId, userIds) {
@@ -333,4 +348,5 @@ module.exports = {
   upsertDailyLog,
   getDailyLogs,
   attachRelations,
+  getTimeByUser
 };

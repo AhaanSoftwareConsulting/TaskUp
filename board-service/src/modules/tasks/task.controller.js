@@ -10,12 +10,14 @@ const templates = require('../../utils/emailTemplates');
 /** Enrich the string user-ids on a task (assignedTo, comments.user_id, activityLog.user_id, attachments.uploaded_by) with display info. */
 async function withUserInfo(task) {
   if (!task) return task;
+  const timeByUser = await taskRepo.getTimeByUser(task.id);
   const ids = [
     ...(task.assignedTo || []),
     ...(task.comments || []).map((c) => c.user_id),
     ...(task.comments || []).flatMap((c) => (c.attachments || []).map((a) => a.uploaded_by)),
     ...(task.activityLog || []).map((a) => a.user_id),
     ...(task.attachments || []).map((a) => a.uploaded_by),
+    ...timeByUser.map((t) => t.user_id),
   ];
   const usersById = await getUsersByIds(ids);
   const resolve = (id) => (id ? usersById[id] || { id } : id);
@@ -28,7 +30,11 @@ async function withUserInfo(task) {
       delay: task.time_delay,
       active_start_time: task.active_start_time,
       is_running: !!task.is_running,
-      dailyLogs: [], // full daily logs aren't fetched in bulk here — see note below
+      dailyLogs: [],
+      byUser: timeByUser.map((t) => ({
+        user: resolve(t.user_id),
+        duration: Number(t.total_duration),
+      })),
     },
     assignedTo: (task.assignedTo || []).map(resolve),
     comments: (task.comments || []).map((c) => ({
@@ -66,12 +72,12 @@ const createTask = async (req, res) => {
     await taskRepo.addActivityLog(newTask.id, { userId: req.user.id, action: 'Task created' });
 
     if (assignedTo && assignedTo.length) {
-  await Promise.all(
-    assignedTo
-      .filter((id) => String(id) !== String(req.user.id))
-      .map((id) => notifyAssigned({ assigneeId: id, actorId: req.user.id, taskTitle: title, boardName: board.name }))
-  );
-}
+      await Promise.all(
+        assignedTo
+          .filter((id) => String(id) !== String(req.user.id))
+          .map((id) => notifyAssigned({ assigneeId: id, actorId: req.user.id, taskTitle: title, boardName: board.name }))
+      );
+    }
 
     const full = await taskRepo.findFull(newTask.id);
     res.status(201).json(await withUserInfo(full));
@@ -111,34 +117,34 @@ const moveTask = async (req, res) => {
       //   message: `"${task.title}" moved from "${oldColumnTitle}" to "${newCol.name}"`,
       // });
 
-      
-    const [actor, assignees] = await Promise.all([
-      getUserById(req.user.id),
-      getUsersByIds((await taskRepo.findFull(taskId)).assignedTo),
-    ]);
-   
 
-    await Promise.all(
-      Object.values(assignees)
-        .filter((u) => u.id !== req.user.id && u.email)
-        .map((u) =>
-          notifyUser({
-            userId: u.id,
-            title: 'Task moved',
-            message: `"${task.title}" moved from "${oldColumnTitle}" to "${newCol.name}"`,
-            email: {
-              to: u.email,
-              ...templates.statusChanged({
-                taskTitle: task.title,
-                boardName: board?.name,
-                changedBy: actor?.full_name || 'Someone',
-                from: oldColumnTitle,
-                to: newCol.name,
-              }),
-            },
-          })
-        )
-    );
+      const [actor, assignees] = await Promise.all([
+        getUserById(req.user.id),
+        getUsersByIds((await taskRepo.findFull(taskId)).assignedTo),
+      ]);
+
+
+      await Promise.all(
+        Object.values(assignees)
+          .filter((u) => u.id !== req.user.id && u.email)
+          .map((u) =>
+            notifyUser({
+              userId: u.id,
+              title: 'Task moved',
+              message: `"${task.title}" moved from "${oldColumnTitle}" to "${newCol.name}"`,
+              email: {
+                to: u.email,
+                ...templates.statusChanged({
+                  taskTitle: task.title,
+                  boardName: board?.name,
+                  changedBy: actor?.full_name || 'Someone',
+                  from: oldColumnTitle,
+                  to: newCol.name,
+                }),
+              },
+            })
+          )
+      );
 
     } else {
       await taskRepo.addActivityLog(taskId, {
@@ -231,7 +237,7 @@ const updateTask = async (req, res) => {
           newValue: newIds,
         });
         const taskBoard = await boardRepo.findById(task.board_id);
-await notifyAssigned({ assigneeId: addedId, actorId: req.user.id, taskTitle: task.title, boardName: taskBoard?.name });
+        await notifyAssigned({ assigneeId: addedId, actorId: req.user.id, taskTitle: task.title, boardName: taskBoard?.name });
       }
       await taskRepo.setAssignees(taskId, newIds);
     }
@@ -295,11 +301,11 @@ const addTaskComment = async (req, res) => {
     // Files
     const commentAttachments = req.files
       ? req.files.map((file) => ({
-          fileName: file.originalname,
-          fileUrl: `${config.uploads.baseUrl}/${file.filename}`,
-          fileType: file.mimetype,
-          uploadedBy: userId,
-        }))
+        fileName: file.originalname,
+        fileUrl: `${config.uploads.baseUrl}/${file.filename}`,
+        fileType: file.mimetype,
+        uploadedBy: userId,
+      }))
       : [];
 
     // Save comment
@@ -326,71 +332,70 @@ const addTaskComment = async (req, res) => {
 
     // Get users assigned to this task
     // --------------------------------------------------
-// NOTIFY TASK MEMBERS / PREVIOUS COMMENTERS
-// --------------------------------------------------
+    // NOTIFY TASK MEMBERS / PREVIOUS COMMENTERS
+    // --------------------------------------------------
 
-const assignedIds = (task.assignedTo || []).map(String);
+    const assignedIds = (task.assignedTo || []).map(String);
 
-const commenterIds = (task.comments || [])
-  .map((comment) => comment.user_id)
-  .filter(Boolean)
-  .map(String);
+    const commenterIds = (task.comments || [])
+      .map((comment) => comment.user_id)
+      .filter(Boolean)
+      .map(String);
 
-const recipientIds = [
-  ...new Set([
-    ...assignedIds,
-    ...commenterIds,
-  ]),
-].filter((id) => id !== String(userId));
+    const recipientIds = [
+      ...new Set([
+        ...assignedIds,
+        ...commenterIds,
+      ]),
+    ].filter((id) => id !== String(userId));
 
-console.log('Comment notify:', {
-  assignedIds,
-  commenterIds,
-  currentUserId: String(userId),
-  recipientIds,
-});
+    console.log('Comment notify:', {
+      assignedIds,
+      commenterIds,
+      currentUserId: String(userId),
+      recipientIds,
+    });
 
-if (recipientIds.length > 0) {
-  const [commentAuthor, users] = await Promise.all([
-    getUserById(userId),
-    getUsersByIds(recipientIds),
-  ]);
+    if (recipientIds.length > 0) {
+      const [commentAuthor, users] = await Promise.all([
+        getUserById(userId),
+        getUsersByIds(recipientIds),
+      ]);
 
-  console.log('Comment notification users:', users);
+      console.log('Comment notification users:', users);
 
-  await Promise.all(
-    Object.values(users)
-      .filter(
-        (user) =>
-          user?.id &&
-          String(user.id) !== String(userId) &&
-          user.email
-      )
-      .map((user) =>
-        notifyUser({
-          userId: user.id,
+      await Promise.all(
+        Object.values(users)
+          .filter(
+            (user) =>
+              user?.id &&
+              String(user.id) !== String(userId) &&
+              user.email
+          )
+          .map((user) =>
+            notifyUser({
+              userId: user.id,
 
-          title: 'New comment',
+              title: 'New comment',
 
-          message: `${
-            commentAuthor?.full_name || 'Someone'
-          } commented on "${task.title}"`,
+              message: `${commentAuthor?.full_name || 'Someone'
+                } commented on "${task.title}"`,
 
-          email: {
-            to: user.email,
-            ...templates.commentAdded({
-              taskTitle: task.title,
-              boardName: board?.name,
-              commentedBy:
-                commentAuthor?.full_name || 'Someone',
-              comment: text || 'Added an attachment',
-              taskLink: `${config.frontend.url}/tasks/${taskId}`,
-            }),
-          },
-        })
-      )
-  );
-}
+              email: {
+                to: user.email,
+                ...templates.commentAdded({
+                  taskTitle: task.title,
+                  boardName: board?.name,
+                  commentedBy:
+                    commentAuthor?.full_name || 'Someone',
+                  comment: text || 'Added an attachment',
+                  taskLink: `${config.frontend.url}/tasks/${taskId}`,
+                }),
+              },
+            })
+          )
+      );
+    }
 
 
     // Return updated task
@@ -413,10 +418,11 @@ const toggleTimer = async (req, res) => {
   if (!task) return res.status(404).json({ message: 'Task not found' });
 
   const now = new Date();
-
+  const MAX_SESSION_MS = 8 * 3600000;
   if (task.is_running) {
     const startTime = new Date(task.active_start_time);
-    const workDone = now.getTime() - startTime.getTime();
+    const rawWorkDone = now.getTime() - startTime.getTime();
+    const workDone = Math.min(rawWorkDone, MAX_SESSION_MS);
     const deadline = task.due_date ? new Date(task.due_date).getTime() : null;
     const goalMs = (task.estimated_time || 0) * 3600000;
 
@@ -439,7 +445,7 @@ const toggleTimer = async (req, res) => {
     });
 
     const todayStr = now.toISOString().split('T')[0];
-    await taskRepo.upsertDailyLog(taskId, todayStr, workDone);
+    await taskRepo.upsertDailyLog(taskId, req.user.id, todayStr, workDone);
   } else {
     await taskRepo.updateTimeManagement(taskId, { is_running: true, active_start_time: now });
   }
