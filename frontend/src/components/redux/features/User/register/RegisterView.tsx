@@ -2,6 +2,7 @@ import { useForm } from "react-hook-form";
 import { useAppDispatch, useAppSelector } from "../../../app/hook";
 import { registerUser } from "./registerSlice";
 import { CaretDownIcon } from "@phosphor-icons/react";
+import { PasswordInput } from "../../../../modal/PasswordInput";
 
 interface RegisterForm {
   fullName: string;
@@ -16,10 +17,10 @@ export const RegisterView = () => {
   const { loading, error, successMessage } = useAppSelector((state) => state.register);
 
   const { register, handleSubmit, reset } = useForm<RegisterForm>();
-const currentUser = useAppSelector((s) => s.login.user);
-const ROLES = currentUser?.role === "ceo"
-  ? [{ value: "employee", label: "Employee" }, { value: "hr", label: "HR" }, { value: "manager", label: "Manager" }]
-  : [{ value: "employee", label: "Employee" }, { value: "hr", label: "HR" }];
+  const currentUser = useAppSelector((s) => s.login.user);
+  const ROLES = currentUser?.role === "ceo"
+    ? [{ value: "employee", label: "Employee" }, { value: "hr", label: "HR" }, { value: "manager", label: "Manager" }]
+    : [{ value: "employee", label: "Employee" }, { value: "hr", label: "HR" }];
   const submitHandler = (data: RegisterForm) => {
     dispatch(registerUser(data)).then(() => reset());
   };
@@ -60,21 +61,12 @@ const ROLES = currentUser?.role === "ceo"
         "
       />
 
-      <input
-        type="password"
+      <PasswordInput
         placeholder="Password"
-        {...register("password", { required: true })}
-        className="
-          w-full
-          px-6
-          py-4
-          border
-          border-gray-300
-          rounded-full
-          focus:outline-none
-          focus:border-black
-        "
+        name="password"
+        register={register}
       />
+
       <div className="relative w-full group">
         <select
           {...register("role", { required: true })}
@@ -100,10 +92,10 @@ const ROLES = currentUser?.role === "ceo"
         </p>
       )}
       {successMessage && (
-  <p className="text-emerald-600 text-sm text-center">
-    {successMessage} They'll need to verify their email before signing in.
-  </p>
-)}
+        <p className="text-emerald-600 text-sm text-center">
+          {successMessage} They'll need to verify their email before signing in.
+        </p>
+      )}
 
       <button
         type="submit"
