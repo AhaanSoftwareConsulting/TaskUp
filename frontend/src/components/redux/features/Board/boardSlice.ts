@@ -93,6 +93,17 @@ export const editBoard = createAsyncThunk<Board, { boardId: string, name: string
         }
     }
 )
+export const removeMember = createAsyncThunk<Board, { boardId: string; memberId: string }, { rejectValue: string }>(
+  "board/removeMember",
+  async ({ boardId, memberId }, { rejectWithValue }) => {
+    try {
+      const res = await axiosClient.delete(`/api/boards/${boardId}/members/${memberId}`);
+      return res.data;
+    } catch (err: any) {
+      return rejectWithValue(err.response?.data?.message || err.message);
+    }
+  }
+);
 
 const boardSlice = createSlice({
     name: "baord",

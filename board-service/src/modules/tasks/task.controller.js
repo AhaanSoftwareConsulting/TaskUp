@@ -264,43 +264,148 @@ const deleteTask = async (req, res) => {
 const addTaskComment = async (req, res) => {
   try {
     if (!req.body) {
-      return res.status(400).json({ message: 'No data received. Ensure you are using multipart/form-data.' });
+      return res.status(400).json({
+        message: 'No data received. Ensure you are using multipart/form-data.',
+      });
     }
+
     const { taskId } = req.params;
     const { text } = req.body;
     const userId = req.user.id;
 
     if (!text && (!req.files || req.files.length === 0)) {
-      return res.status(400).json({ message: 'Comment cannot be empty' });
+      return res.status(400).json({
+        message: 'Comment cannot be empty',
+      });
     }
 
-    const task = await taskRepo.findById(taskId);
-    if (!task) return res.status(404).json({ message: 'Task not found' });
+    // Get task
+    const task = await taskRepo.findFull(taskId);
 
+
+    if (!task) {
+      return res.status(404).json({
+        message: 'Task not found',
+      });
+    }
+
+    // Get board
+    const board = await boardRepo.findById(task.board_id);
+
+    // Files
     const commentAttachments = req.files
       ? req.files.map((file) => ({
-        fileName: file.originalname,
-        fileUrl: `${config.uploads.baseUrl}/${file.filename}`,
-        fileType: file.mimetype,
-        uploadedBy: userId,
-      }))
+          fileName: file.originalname,
+          fileUrl: `${config.uploads.baseUrl}/${file.filename}`,
+          fileType: file.mimetype,
+          uploadedBy: userId,
+        }))
       : [];
 
-    await taskRepo.addComment(taskId, { userId, text: text || '', attachments: commentAttachments });
+    // Save comment
+    await taskRepo.addComment(taskId, {
+      userId,
+      text: text || '',
+      attachments: commentAttachments,
+    });
 
+    // Activity log
     const logAction =
       commentAttachments.length > 0
         ? `added a comment with ${commentAttachments.length} file(s)`
         : `added a comment: "${text?.substring(0, 20)}..."`;
-    await taskRepo.addActivityLog(taskId, { userId, action: logAction });
 
+    await taskRepo.addActivityLog(taskId, {
+      userId,
+      action: logAction,
+    });
+
+    // --------------------------------------------------
+    // NOTIFY TASK MEMBERS
+    // --------------------------------------------------
+
+    // Get users assigned to this task
+    // --------------------------------------------------
+// NOTIFY TASK MEMBERS / PREVIOUS COMMENTERS
+// --------------------------------------------------
+
+const assignedIds = (task.assignedTo || []).map(String);
+
+const commenterIds = (task.comments || [])
+  .map((comment) => comment.user_id)
+  .filter(Boolean)
+  .map(String);
+
+const recipientIds = [
+  ...new Set([
+    ...assignedIds,
+    ...commenterIds,
+  ]),
+].filter((id) => id !== String(userId));
+
+console.log('Comment notify:', {
+  assignedIds,
+  commenterIds,
+  currentUserId: String(userId),
+  recipientIds,
+});
+
+if (recipientIds.length > 0) {
+  const [commentAuthor, users] = await Promise.all([
+    getUserById(userId),
+    getUsersByIds(recipientIds),
+  ]);
+
+  console.log('Comment notification users:', users);
+
+  await Promise.all(
+    Object.values(users)
+      .filter(
+        (user) =>
+          user?.id &&
+          String(user.id) !== String(userId) &&
+          user.email
+      )
+      .map((user) =>
+        notifyUser({
+          userId: user.id,
+
+          title: 'New comment',
+
+          message: `${
+            commentAuthor?.full_name || 'Someone'
+          } commented on "${task.title}"`,
+
+          email: {
+            to: user.email,
+            ...templates.commentAdded({
+              taskTitle: task.title,
+              boardName: board?.name,
+              commentedBy:
+                commentAuthor?.full_name || 'Someone',
+              comment: text || 'Added an attachment',
+              taskLink: `${config.frontend.url}/tasks/${taskId}`,
+            }),
+          },
+        })
+      )
+  );
+}
+
+
+    // Return updated task
     const updated = await taskRepo.findFull(taskId);
+
     res.status(201).json(await withUserInfo(updated));
   } catch (error) {
     console.error('Critical Save Error:', error);
-    res.status(500).json({ message: error.message });
+
+    res.status(500).json({
+      message: error.message,
+    });
   }
 };
+
 
 const toggleTimer = async (req, res) => {
   const { taskId } = req.params;

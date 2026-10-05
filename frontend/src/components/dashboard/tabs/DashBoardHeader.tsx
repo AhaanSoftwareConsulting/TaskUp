@@ -4,16 +4,18 @@ import { Plus, X } from '@phosphor-icons/react';
 import UserSearchInput from '../UserSearchInput';
 import { getAvatarColor } from "../../utils/avatarColor";
 import type { User } from '../../types/user.Types'
-import { useAppDispatch } from "../../redux/app/hook";
+import { useAppDispatch, useAppSelector } from "../../redux/app/hook";
 import { useCurrentBoard } from "../../hooks/useCurrentBoard";
 import { addMember as addMemberThunk } from "../../redux/features/Board/boardSlice";
-
+import { removeMember as removeMemberThunk } from "../../redux/features/Board/boardSlice";
 export const DashBoardHeader = () => {
     const [isOpen, setIsOpen] = useState(false)
     const [selectedUser, setSelectedUser] = useState<User | null>(null);
     const dropdownRef = useRef<HTMLDivElement | null>(null);
     const dispatch = useAppDispatch()
     const board = useCurrentBoard()
+    const currentUser = useAppSelector((s) => s.login.user);
+    const canManage = currentUser?.role === "manager" || currentUser?.role === "ceo";
     useEffect(() => {
         const handaleClickOutside = (e: MouseEvent) => {
             if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
@@ -47,9 +49,17 @@ export const DashBoardHeader = () => {
                                 key={m.id}
                                 title={m.full_name || "Unknown"}
                                 style={{ backgroundColor: getAvatarColor(m.full_name) }}
-                                className="w-8 h-8 rounded-full text-white text-xs font-semibold flex items-center justify-center border-2 border-white"
+                                className="relative group w-8 h-8 rounded-full text-white text-xs font-semibold flex items-center justify-center border-2 border-white"
                             >
                                 {(m.full_name || "?").charAt(0).toUpperCase()}
+                                {canManage && (
+                                    <button
+                                        onClick={() => dispatch(removeMemberThunk({ boardId: board.id, memberId: m.id }))}
+                                        className="absolute -top-1 -right-1 hidden group-hover:flex w-4 h-4 bg-red-500 rounded-full items-center justify-center text-white text-[8px]"
+                                    >
+                                        ✕
+                                    </button>
+                                )}
                             </div>
                         ))}
                         {board.members.length > 4 && (
@@ -58,7 +68,6 @@ export const DashBoardHeader = () => {
                             </div>
                         )}
                     </div>
-
                     <button
                         onClick={() => {
                             setIsOpen(true);

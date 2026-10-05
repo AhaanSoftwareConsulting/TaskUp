@@ -20,13 +20,13 @@ const createBoard = async (req, res) => {
 
   try {
     const newBoard = await boardRepo.create({ name, owner: ownerId, memberIds: members || [] });
+
     const others = (members || []).filter((id) => id && id !== ownerId);
     await Promise.all(
       others.map((memberId) => notifyAddedToBoard({ memberId, actorId: ownerId, boardName: name }))
     );
 
     return res.status(201).json(await withMemberInfo(newBoard));
-
   } catch (error) {
     console.error('Error creating Board', error);
     res.status(500).json({ message: 'server error: failed to create board' });
@@ -153,5 +153,21 @@ const editBoard = async (req, res) => {
     return res.status(500).json({ message: 'Internal server error' });
   }
 };
+// board.controller.js — add
+const removeMemberFromBoard = async (req, res) => {
+  const { boardId, memberId } = req.params;
+  try {
+    const board = await boardRepo.findById(boardId);
+    if (!board) return res.status(404).json({ message: 'Board not found' });
+    if (String(board.owner) === String(memberId)) {
+      return res.status(400).json({ message: "Can't remove the board owner" });
+    }
+    await boardRepo.removeMember(boardId, memberId);
+    const updated = await boardRepo.findById(boardId);
+    return res.status(200).json(await withMemberInfo(updated));
+  } catch (error) {
+    res.status(500).json({ message: 'Server error' });
+  }
+};
 
-module.exports = { createBoard, getBoardsForUser, getBoardById, addMemberToBoard, deleteBoard, editBoard };
+module.exports = { createBoard, getBoardsForUser, getBoardById, addMemberToBoard, deleteBoard, editBoard, removeMemberFromBoard };

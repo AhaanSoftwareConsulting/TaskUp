@@ -8,7 +8,6 @@ import {
 import {
   MagnifyingGlass,
   Bell,
-  Chats,
   Gear,
 } from "@phosphor-icons/react";
 
@@ -61,9 +60,15 @@ export const Topbar = () => {
   /* ============================= */
   /* Fetch Notifications           */
   /* ============================= */
-  useEffect(() => {
+useEffect(() => {
     dispatch(fetchNotifications());
-  }, [dispatch]);
+
+    const interval = setInterval(() => {
+        dispatch(fetchNotifications());
+    }, 30000); // refresh every 30s
+
+    return () => clearInterval(interval);
+}, [dispatch]);
 
   /* ============================= */
   /* Close dropdown on outside click */
@@ -89,18 +94,9 @@ export const Topbar = () => {
     }
   };
 
-  const role = user?.role;
+  
 
-  const openChatInNewTab = () => {
-    if (!role) return;
-    const chatPath = `/${role}/dashboard/chats`;
 
-    window.open(
-      `${window.location.origin}${chatPath}`,
-      "_blank",
-      "noopener,noreferrer"
-    );
-  };
 
   return (
     <header className="sticky top-0 z-40 h-16 px-6 flex items-center justify-between bg-white/80 backdrop-blur-md border-b border-gray-100">
@@ -118,13 +114,7 @@ export const Topbar = () => {
       {/* ================= RIGHT SIDE ================= */}
       <div className="flex items-center gap-5">
 
-        {/* CHAT */}
-        <button
-          onClick={openChatInNewTab}
-          className="relative text-gray-500 hover:text-black transition"
-        >
-          <Chats size={20} />
-        </button>
+       
 
         {/* ================= NOTIFICATIONS ================= */}
         <div className="relative" ref={dropdownRef}>
