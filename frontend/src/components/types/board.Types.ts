@@ -27,11 +27,10 @@ export type DailyLog = {
 export type TimeManagement = {
   estimated_time: number;
   total_logged_time: number;
-  time_delay: number;
+  delay: number;
   dailyLogs: DailyLog[];
-  active_start_time: string | null;
-  is_running: boolean;
   byUser: { user: User; duration: number }[];
+  activeTimers: { user: User; active_start_time: string }[];
 };
 
 export type Comment = {
@@ -77,7 +76,7 @@ export type Task = {
 
   due_date: string | Date;
   start_date: string | Date;
-
+is_favorited: boolean;
   column_id: string;
   board_id: string;
 

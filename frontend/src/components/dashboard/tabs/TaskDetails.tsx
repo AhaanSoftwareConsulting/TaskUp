@@ -17,6 +17,7 @@ interface TaskDetailsProps {
     task: Task,
     onClose: () => void,
     status: string | null,
+    variant?: 'modal'| 'page',
 }
 
 const EditableRow = ({
@@ -61,13 +62,14 @@ const EditableRow = ({
     );
 };
 
-export const TaskDetails = ({ task, status, onClose }: TaskDetailsProps) => {
+export const TaskDetails = ({ task, status, onClose, variant='modal' }: TaskDetailsProps) => {
     const [activeField, setActiveField] = useState<keyof Task | 'timeGoal' | 'dates' | null>(null);
     const [editedTask, setEditedTask] = useState<Partial<Task>>({ ...task });
     const [isdropdown, setIsdropdown] = useState(false);
     const dispatch = useAppDispatch()
     const board = useCurrentBoard()
-    const columns = useBoardColumns(task.board_id); // array of { id, name }
+    const columns = useBoardColumns(task.board_id); 
+    const isPage=variant==='page'
 
     const handleColumnChange = (newColumnId: string) => {
         dispatch(moveTaskThunk({ taskId: task.id, newColumnId, newPosition: 0 }));
@@ -153,8 +155,14 @@ export const TaskDetails = ({ task, status, onClose }: TaskDetailsProps) => {
     }
 
     return (
-        <div className="fixed inset-0 bg-black/40 flex justify-center items-center z-50 p-4 backdrop-blur-sm">
-            <div className="bg-white w-full max-w-6xl max-h-[92vh] overflow-hidden flex flex-col rounded-2xl shadow-2xl border border-gray-100">
+        <div className={isPage
+            ? "w-full h-full bg-white flex flex-col overflow-hidden"
+            : "fixed inset-0 bg-black/40 flex justify-center items-center z-50 p-4 backdrop-blur-sm"
+        }>
+            <div className={isPage
+                ? "bg-white w-full h-full flex flex-col overflow-hidden"
+                : "bg-white w-full max-w-6xl max-h-[92vh] overflow-hidden flex flex-col rounded-2xl shadow-2xl border border-gray-100"
+            }>
 
                 <TaskDetailsHeader task={task} onClose={onClose} />
 

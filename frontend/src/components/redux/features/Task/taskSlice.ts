@@ -5,6 +5,7 @@ import { deleteColumn } from "../Column/columnSlice";
 
 interface taskState {
     task: Task[];
+    favorites: Task[];
     selectedTask: Task | null;
     loading: "idle" | "pending" | "fulfilled" | "failed",
     error: string | null
@@ -12,12 +13,13 @@ interface taskState {
 
 const initialState: taskState = {
     task: [],
+    favorites: [],
     selectedTask: null,
     loading: 'idle',
     error: null
 }
 interface GetTasksParams {
-    scope?: "mine" | "all";
+    scope?: "mine" | "all" | "favorites";
     boardId?: string;
     columnId?: string;
 }
@@ -139,6 +141,45 @@ export const deleteFiles = createAsyncThunk("task/deleteFiles", async ({ taskId,
         return rejectWithValue(error.response?.data?.message || error.message)
     }
 })
+export const toggleFavorite = createAsyncThunk<
+    { taskId: string; is_favorited: boolean },
+    string,
+    { rejectValue: string }
+>(
+    "task/toggleFavorite",
+    async (taskId, { rejectWithValue }) => {
+        try {
+            const res = await axiosClient.post(
+                `/api/tasks/${taskId}/favorite`,
+                {},
+                { withCredentials: true }
+            );
+
+            return {
+                taskId,
+                is_favorited: res.data.is_favorited,
+            };
+        } catch (err: any) {
+            console.error("Toggle favorite error:", err.response?.data || err);
+
+            return rejectWithValue(
+                err.response?.data?.message || err.message
+            );
+        }
+    }
+);
+
+export const getFavoriteTasks = createAsyncThunk<Task[], void, { rejectValue: string }>(
+    "tasks/getFavorites",
+    async (_, { rejectWithValue }) => {
+        try {
+            const res = await axiosClient.get(`/api/tasks?scope=favorites`, { withCredentials: true });
+            return res.data;
+        } catch (err: any) {
+            return rejectWithValue(err.response?.data?.message || err.message);
+        }
+    }
+)
 
 
 
@@ -269,6 +310,46 @@ const taskSlice = createSlice({
             .addCase(deleteFiles.fulfilled, (state, action) => {
                 state.selectedTask = action.payload
             })
+            .addCase(getFavoriteTasks.fulfilled, (state, action) => {
+                state.favorites = action.payload;
+            })
+            .addCase(toggleFavorite.fulfilled, (state, action) => {
+    const { taskId, is_favorited } = action.payload;
+
+    const task = state.task.find((t) => t.id === taskId);
+
+    if (task) {
+        task.is_favorited = is_favorited;
+    }
+
+    if (state.selectedTask?.id === taskId) {
+        state.selectedTask.is_favorited = is_favorited;
+    }
+
+    const favoriteTask = state.favorites.find((t) => t.id === taskId);
+
+    if (is_favorited && !favoriteTask && task) {
+        state.favorites.push({
+            ...task,
+            is_favorited: true,
+        });
+    }
+
+    if (!is_favorited) {
+        state.favorites = state.favorites.filter(
+            (t) => t.id !== taskId
+        );
+    }
+
+    state.loading = "fulfilled";
+    state.error = null;
+})
+.addCase(toggleFavorite.rejected, (state, action) => {
+    state.loading = "failed";
+    state.error = action.payload as string;
+})
+
+            
     }
 })
 export default taskSlice.reducer

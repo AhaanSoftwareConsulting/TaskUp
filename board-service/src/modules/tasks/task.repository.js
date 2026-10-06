@@ -94,13 +94,26 @@ async function attachRelations(tasksOrTask) {
   return isArray ? enriched : enriched[0];
 }
 
-async function findByColumnAndBoard(boardId, columnId) {
+async function findByColumnAndBoard(boardId, columnId, userId) {
   const tasks = await query(
-    'SELECT * FROM tasks WHERE board_id = ? AND column_id = ? ORDER BY position ASC',
-    [boardId, columnId]
+    `SELECT 
+       t.*,
+       EXISTS (
+         SELECT 1
+         FROM task_favorites f
+         WHERE f.task_id = t.id
+           AND f.user_id = ?
+       ) AS is_favorited
+     FROM tasks t
+     WHERE t.board_id = ?
+       AND t.column_id = ?
+     ORDER BY t.position ASC`,
+    [userId, boardId, columnId]
   );
+
   return attachRelations(tasks);
 }
+
 
 async function findByAssignee(userId) {
   const tasks = await query(
@@ -113,15 +126,29 @@ async function findByAssignee(userId) {
   return attachRelations(tasks);
 }
 
-async function findByBoards(boardIds) {
+async function findByBoards(boardIds, userId) {
   if (!boardIds.length) return [];
+
   const placeholders = boardIds.map(() => '?').join(',');
+
   const tasks = await query(
-    `SELECT * FROM tasks WHERE board_id IN (${placeholders}) ORDER BY created_at DESC`,
-    boardIds
+    `SELECT 
+       t.*,
+       EXISTS (
+         SELECT 1
+         FROM task_favorites f
+         WHERE f.task_id = t.id
+           AND f.user_id = ?
+       ) AS is_favorited
+     FROM tasks t
+     WHERE t.board_id IN (${placeholders})
+     ORDER BY t.created_at DESC`,
+    [userId, ...boardIds]
   );
+
   return attachRelations(tasks);
 }
+
 
 // task.repository.js
 const UPDATABLE_COLUMNS = {
@@ -326,6 +353,44 @@ async function setAssignees(taskId, userIds) {
     conn.release();
   }
 }
+async function toggleFavorite(taskId, userId) {
+  const rows = await query('SELECT 1 FROM task_favorites WHERE task_id = ? AND user_id = ?', [taskId, userId]);
+  if (rows.length) {
+    await query('DELETE FROM task_favorites WHERE task_id = ? AND user_id = ?', [taskId, userId]);
+    return false;
+  }
+  await query('INSERT INTO task_favorites (task_id, user_id) VALUES (?, ?)', [taskId, userId]);
+  return true;
+}
+
+async function getActiveTimer(taskId, userId) {
+  const rows = await query('SELECT * FROM task_active_timers WHERE task_id = ? AND user_id = ?', [taskId, userId]);
+  return rows[0] || null;
+}
+async function startTimer(taskId, userId, startTime) {
+  await query(
+    'INSERT INTO task_active_timers (task_id, user_id, active_start_time) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE active_start_time = VALUES(active_start_time)',
+    [taskId, userId, startTime]
+  );
+}
+async function stopTimer(taskId, userId) {
+  await query('DELETE FROM task_active_timers WHERE task_id = ? AND user_id = ?', [taskId, userId]);
+}
+async function getActiveTimersForTask(taskId) {
+  return query('SELECT user_id, active_start_time FROM task_active_timers WHERE task_id = ?', [taskId]);
+}
+
+// task.repository.js — add
+async function findFavoritesByUser(userId) {
+  const tasks = await query(
+    `SELECT t.* FROM tasks t
+     JOIN task_favorites f ON f.task_id = t.id
+     WHERE f.user_id = ?
+     ORDER BY f.created_at DESC`,
+    [userId]
+  );
+  return attachRelations(tasks);
+}
 
 module.exports = {
   create,
@@ -348,5 +413,11 @@ module.exports = {
   upsertDailyLog,
   getDailyLogs,
   attachRelations,
-  getTimeByUser
+  getTimeByUser,
+  toggleFavorite,
+  getActiveTimer,
+  startTimer,
+  stopTimer,
+  getActiveTimersForTask,
+  findFavoritesByUser
 };

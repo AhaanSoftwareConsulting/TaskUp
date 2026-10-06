@@ -14,6 +14,7 @@ import {
     CaretLeftIcon,
     SignOutIcon,
     KanbanIcon,
+    UserCircleIcon,
 } from "@phosphor-icons/react";
 import { logoutUser } from "../redux/features/User/login/loginSlice";
 import { CreateBoardForm } from "../redux/features/Board/CreateBoardForm"
@@ -116,6 +117,13 @@ export const Sidebar = ({ collapsed, setCollapsed }: SidebarProps) => {
                             {!collapsed && "Home"}
                         </div>
                     </NavLink>
+                   
+<NavLink to={`/${role}/dashboard/profile`} className={({ isActive }) => `${baseRow} ${isActive ? active : inactive}`}>
+    <div className={`flex items-center gap-3 ${collapsed ? "justify-center w-full" : ""}`}>
+        <UserCircleIcon size={18} />
+        {!collapsed && "Profile"}
+    </div>
+</NavLink>
                     <NavLink to={`${dashboardBase}/tasks?scope=${(role === 'manager' || role === 'ceo') ? 'all' : 'mine'}`}
                         className={({ isActive }) => `${baseRow} ${isActive ? active : inactive} `}>
                         <div
