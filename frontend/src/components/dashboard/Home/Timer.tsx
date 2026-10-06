@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useAppDispatch } from "../../redux/app/hook";
+import { useAppDispatch, useAppSelector } from "../../redux/app/hook";
 import { toggleTimer } from "../../redux/features/Task/taskSlice";
 import type { TimeManagement } from "../../types/board.Types";
 import { Play, Pause, WarningCircle } from "@phosphor-icons/react";
@@ -13,23 +13,27 @@ interface TimerProps {
 
 export const Timer = ({ taskId, timeData, dueDate, estimatedTime = 0 }: TimerProps) => {
     const dispatch = useAppDispatch();
+    const currentUser = useAppSelector((s) => s.login.user);
     const [elapsedSinceStart, setElapsedSinceStart] = useState(0);
+
+    const myTimer = timeData?.activeTimers?.find((t) => t.user.id === currentUser?.id);
+    const isRunning = !!myTimer;
+    const activeStartTime = myTimer?.active_start_time ?? null;
+
+    // This person's own accumulated time — not the shared task total.
+    const myLoggedMs = timeData?.byUser?.find((e) => e.user.id === currentUser?.id)?.duration ?? 0;
 
     useEffect(() => {
         let interval: ReturnType<typeof setInterval> | undefined;
-
-        if (timeData?.is_running && timeData?.active_start_time) {
+        if (isRunning && activeStartTime) {
             interval = setInterval(() => {
-                const now = new Date().getTime();
-                const start = new Date(timeData.active_start_time!).getTime();
-                setElapsedSinceStart(now - start);
+                setElapsedSinceStart(Date.now() - new Date(activeStartTime).getTime());
             }, 1000);
         } else {
             setElapsedSinceStart(0);
         }
-
         return () => { if (interval) clearInterval(interval); };
-    }, [timeData?.is_running, timeData?.active_start_time]);
+    }, [isRunning, activeStartTime]);
 
     const formatTime = (ms: number) => {
         const h = Math.floor(ms / 3600000);
@@ -38,23 +42,24 @@ export const Timer = ({ taskId, timeData, dueDate, estimatedTime = 0 }: TimerPro
         return `${h}h ${m}m ${s}s`;
     };
 
-    const totalMs = (timeData?.total_logged_time || 0) + elapsedSinceStart;
+    // "My time" = my own logged total + my own live session, if running
+    const myTotalMs = myLoggedMs + elapsedSinceStart;
     const goalMs = estimatedTime * 3600000;
-    const cappedLoggedTime = goalMs > 0 ? Math.min(totalMs, goalMs) : totalMs;
+    const cappedLoggedTime = goalMs > 0 ? Math.min(myTotalMs, goalMs) : myTotalMs;
 
-    let liveDelay = timeData?.time_delay || 0;
+    let liveDelay = timeData?.delay || 0;
 
-    if (goalMs > 0 && totalMs > goalMs) {
-        liveDelay += (totalMs - goalMs);
+    if (goalMs > 0 && myTotalMs > goalMs) {
+        liveDelay += (myTotalMs - goalMs);
     }
 
-    if (timeData?.is_running && dueDate && timeData.active_start_time) {
+    if (isRunning && dueDate && activeStartTime) {
         const deadline = new Date(dueDate).getTime();
         const now = new Date().getTime();
         if (now > deadline) {
-            const start = new Date(timeData.active_start_time).getTime();
+            const start = new Date(activeStartTime).getTime();
             const currentSessionDelay = start > deadline ? elapsedSinceStart : now - deadline;
-            if (totalMs <= goalMs) {
+            if (myTotalMs <= goalMs) {
                 liveDelay += currentSessionDelay;
             }
         }
@@ -65,25 +70,16 @@ export const Timer = ({ taskId, timeData, dueDate, estimatedTime = 0 }: TimerPro
             <div className="flex items-center gap-3 bg-white p-2.5 rounded-xl border border-gray-200 shadow-sm">
                 <div className="flex flex-col items-start px-1">
                     <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">
-                        {totalMs > goalMs && goalMs > 0 ? "Goal Reached" : "Time Logged"}
+                        {myTotalMs > goalMs && goalMs > 0 ? "Goal Reached" : "My Time Logged"}
                     </span>
-                    <span className={`font-mono font-bold text-sm tabular-nums ${totalMs > goalMs && goalMs > 0 ? "text-emerald-600" : "text-gray-800"}`}>
+                    <span className={`font-mono font-bold text-sm tabular-nums ${myTotalMs > goalMs && goalMs > 0 ? "text-emerald-600" : "text-gray-800"}`}>
                         {formatTime(cappedLoggedTime)}
                     </span>
                 </div>
 
-                <button
-                    onClick={(e) => {
-                        e.stopPropagation();
-                        dispatch(toggleTimer({ taskId }));
-                    }}
-                    className={`p-2 rounded-lg transition-all ${
-                        timeData?.is_running
-                        ? "bg-red-500 text-white hover:bg-red-600"
-                        : "bg-emerald-500 text-white hover:bg-emerald-600"
-                    }`}
-                >
-                    {timeData?.is_running ? <Pause size={18} weight="fill" /> : <Play size={18} weight="fill" />}
+                <button onClick={(e) => { e.stopPropagation(); dispatch(toggleTimer({ taskId })); }}
+                    className={`p-2 rounded-lg transition-all ${isRunning ? "bg-red-500 text-white hover:bg-red-600" : "bg-emerald-500 text-white hover:bg-emerald-600"}`}>
+                    {isRunning ? <Pause size={18} weight="fill" /> : <Play size={18} weight="fill" />}
                 </button>
             </div>
 

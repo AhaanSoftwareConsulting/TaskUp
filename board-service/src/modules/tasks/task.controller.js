@@ -11,6 +11,7 @@ const templates = require('../../utils/emailTemplates');
 async function withUserInfo(task) {
   if (!task) return task;
   const timeByUser = await taskRepo.getTimeByUser(task.id);
+  const activeTimers = await taskRepo.getActiveTimersForTask(task.id);
   const ids = [
     ...(task.assignedTo || []),
     ...(task.comments || []).map((c) => c.user_id),
@@ -18,6 +19,7 @@ async function withUserInfo(task) {
     ...(task.activityLog || []).map((a) => a.user_id),
     ...(task.attachments || []).map((a) => a.uploaded_by),
     ...timeByUser.map((t) => t.user_id),
+    ...activeTimers.map((t) => t.user_id),
   ];
   const usersById = await getUsersByIds(ids);
   const resolve = (id) => (id ? usersById[id] || { id } : id);
@@ -28,18 +30,13 @@ async function withUserInfo(task) {
       estimated_time: task.estimated_time,
       total_logged_time: task.total_logged_time,
       delay: task.time_delay,
-      active_start_time: task.active_start_time,
-      is_running: !!task.is_running,
       dailyLogs: [],
-      byUser: timeByUser.map((t) => ({
-        user: resolve(t.user_id),
-        duration: Number(t.total_duration),
-      })),
+      byUser: timeByUser.map((t) => ({ user: resolve(t.user_id), duration: Number(t.total_duration) })),
+      activeTimers: activeTimers.map((t) => ({ user: resolve(t.user_id), active_start_time: t.active_start_time })),
     },
     assignedTo: (task.assignedTo || []).map(resolve),
     comments: (task.comments || []).map((c) => ({
-      ...c,
-      user: resolve(c.user_id),
+      ...c, user: resolve(c.user_id),
       attachments: (c.attachments || []).map((a) => ({ ...a, uploadedBy: resolve(a.uploaded_by) })),
     })),
     activityLog: (task.activityLog || []).map((a) => ({ ...a, user: resolve(a.user_id) })),
@@ -411,58 +408,45 @@ const addTaskComment = async (req, res) => {
   }
 };
 
-
+const MAX_SESSION_MS = 8 * 3600000; 
 const toggleTimer = async (req, res) => {
   const { taskId } = req.params;
+  const userId = req.user.id;
   const task = await taskRepo.findById(taskId);
   if (!task) return res.status(404).json({ message: 'Task not found' });
 
+  const existing = await taskRepo.getActiveTimer(taskId, userId);
   const now = new Date();
-  const MAX_SESSION_MS = 8 * 3600000;
-  if (task.is_running) {
-    const startTime = new Date(task.active_start_time);
-    const rawWorkDone = now.getTime() - startTime.getTime();
-    const workDone = Math.min(rawWorkDone, MAX_SESSION_MS);
+
+  if (existing) {
+    const startTime = new Date(existing.active_start_time);
+    const workDone = Math.min(now.getTime() - startTime.getTime(), MAX_SESSION_MS);
+
     const deadline = task.due_date ? new Date(task.due_date).getTime() : null;
     const goalMs = (task.estimated_time || 0) * 3600000;
-
     let sessionDelay = 0;
     if (deadline && now.getTime() > deadline) {
       sessionDelay = startTime.getTime() > deadline ? workDone : now.getTime() - deadline;
     }
-
     const totalAfterSession = Number(task.total_logged_time) + workDone;
     if (goalMs > 0 && totalAfterSession > goalMs) {
-      const overtimeInThisSession = totalAfterSession - Math.max(Number(task.total_logged_time), goalMs);
-      sessionDelay = Math.max(sessionDelay, overtimeInThisSession);
+      sessionDelay = Math.max(sessionDelay, totalAfterSession - Math.max(Number(task.total_logged_time), goalMs));
     }
 
     await taskRepo.updateTimeManagement(taskId, {
       delay: Number(task.time_delay || 0) + sessionDelay,
       total_logged_time: totalAfterSession,
-      is_running: false,
-      active_start_time: null,
     });
+    await taskRepo.stopTimer(taskId, userId);
 
     const todayStr = now.toISOString().split('T')[0];
-    await taskRepo.upsertDailyLog(taskId, req.user.id, todayStr, workDone);
+    await taskRepo.upsertDailyLog(taskId, userId, todayStr, workDone);
   } else {
-    await taskRepo.updateTimeManagement(taskId, { is_running: true, active_start_time: now });
+    await taskRepo.startTimer(taskId, userId, now);
   }
 
-  const updatedTask = await taskRepo.findById(taskId);
-  const dailyLogs = await taskRepo.getDailyLogs(taskId);
-  res.status(200).json({
-    ...updatedTask,
-    timeManagement: {
-      estimated_time: updatedTask.estimated_time,
-      total_logged_time: updatedTask.total_logged_time,
-      delay: updatedTask.time_delay,
-      active_start_time: updatedTask.active_start_time,
-      is_running: !!updatedTask.is_running,
-      dailyLogs: dailyLogs.map((l) => ({ date: l.log_date, duration: l.duration })),
-    },
-  });
+  const updated = await taskRepo.findFull(taskId);
+  res.status(200).json(await withUserInfo(updated));
 };
 
 const getTasks = async (req, res) => {
@@ -475,7 +459,7 @@ const getTasks = async (req, res) => {
       if (!board.members.some((m) => String(m) === String(req.user.id))) {
         return res.status(403).json({ message: 'Access denied' });
       }
-      const tasks = await taskRepo.findByColumnAndBoard(boardId, columnId);
+      const tasks = await taskRepo.findByColumnAndBoard(boardId, columnId, req.user.id);
       return res.status(200).json(await Promise.all(tasks.map(withUserInfo)));
     }
 
@@ -483,10 +467,15 @@ const getTasks = async (req, res) => {
       const tasks = await taskRepo.findByAssignee(req.user.id);
       return res.status(200).json(await Promise.all(tasks.map(withUserInfo)));
     }
+    // task.controller.js — getTasks, add a branch
+if (scope === 'favorites') {
+  const tasks = await taskRepo.findFavoritesByUser(req.user.id);
+  return res.status(200).json(await Promise.all(tasks.map(withUserInfo)));
+}
 
     const boards = await boardRepo.findByMember(req.user.id);
     const boardIds = boards.map((b) => b.id);
-    const tasks = await taskRepo.findByBoards(boardIds);
+    const tasks = await taskRepo.findByBoards(boardIds, req.user.id);
     res.status(200).json(await Promise.all(tasks.map(withUserInfo)));
   } catch (error) {
     console.error('Get tasks error:', error);
@@ -544,6 +533,14 @@ const deleteTaskFile = async (req, res) => {
     res.status(500).json({ message: 'Delete failed', error: error.message });
   }
 };
+const toggleFavorite = async (req, res) => {
+  try {
+    const isFavorited = await taskRepo.toggleFavorite(req.params.taskId, req.user.id);
+    res.status(200).json({ is_favorited: isFavorited });
+  } catch (error) {
+    res.status(500).json({ message: 'Failed to toggle favorite' });
+  }
+};
 
 module.exports = {
   uploadtaskFile,
@@ -555,4 +552,5 @@ module.exports = {
   addTaskComment,
   toggleTimer,
   getTasks,
+  toggleFavorite
 };

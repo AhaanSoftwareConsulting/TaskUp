@@ -58,15 +58,18 @@ export const MyTask = () => {
                         <div className="mt-6 flex items-center gap-6">
                             <div className="flex-grow">
                                 <div className="flex justify-between text-[10px] font-bold text-gray-400 uppercase mb-1.5">
-                                    <span>Progress towards {t.timeManagement?.estimated_time || 0}h goal</span>
-                                    <span className="text-gray-600">{Math.round(((t.timeManagement?.total_logged_time || 0) / ((t.timeManagement?.estimated_time || 1) * 3600000)) * 100)}%</span>
-                                </div>
-                                <div className="w-full bg-gray-100 h-1.5 rounded-full overflow-hidden">
-                                    <div
-                                        className="bg-blue-500 h-full transition-all duration-1000"
-                                        style={{ width: `${Math.min(((t.timeManagement?.total_logged_time || 0) / ((t.timeManagement?.estimated_time || 1) * 3600000)) * 100, 100)}%` }}
-                                    />
-                                </div>
+    <span>Progress towards {t.timeManagement?.estimated_time || 0}h goal</span>
+    <span className="text-gray-600">{Math.round(((t.timeManagement?.total_logged_time || 0) / ((t.timeManagement?.estimated_time || 1) * 3600000)) * 100)}%</span>
+</div>
+<div className="w-full bg-gray-100 h-1.5 rounded-full overflow-hidden">
+    <div className="bg-blue-500 h-full transition-all duration-1000"
+        style={{ width: `${Math.min(((t.timeManagement?.total_logged_time || 0) / ((t.timeManagement?.estimated_time || 1) * 3600000)) * 100, 100)}%` }}
+    />
+</div>
+<p className="text-[10px] text-gray-400 mt-1">
+    Team total: {((t.timeManagement?.total_logged_time || 0) / 3600000).toFixed(1)}h logged
+    {(t.timeManagement?.byUser?.length ?? 0) > 1 && ` across ${t.timeManagement!.byUser.length} members`}
+</p>
                             </div>
 
                             <div className="flex -space-x-1.5 overflow-hidden">

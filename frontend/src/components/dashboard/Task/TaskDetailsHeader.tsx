@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import {
-    X, ListChecks, UsersIcon, Folder, ArrowSquareOut, Star,  DotsThree,
+    X, ListChecks, UsersIcon, Folder, ArrowSquareOut, Star, DotsThree,
 } from "@phosphor-icons/react"
 import { useCurrentBoard } from '../../hooks/useCurrentBoard'
 import { useAppDispatch, useAppSelector } from '../../redux/app/hook'
 import { deleteTask as deleteTaskThunk } from '../../redux/features/Task/taskSlice'
+import { toggleFavorite as toggleFavoriteThunk } from '../../redux/features/Task/taskSlice'
 import type { Task } from '../../types/board.Types'
 import { DeleteModal } from '../../modal/DeleteModal'
 
@@ -42,9 +43,10 @@ export const TaskDetailsHeader = ({ task, onClose }: TaskDetailsHeaderProps) => 
     };
 
     const handleOpenNewTab = () => {
-        const url = `${window.location.origin}${window.location.pathname.replace(/\/[^/]+$/, '')}/tasks/${task.id}`;
-        window.open(url, '_blank', 'noopener,noreferrer');
-    };
+    const url = `${window.location.origin}/${role}/dashboard/tasks/${task.id}`;
+    window.open(url, '_blank', 'noopener,noreferrer');
+};
+
 
     // Fallback board name if board context is missing
     const displayBoardName = board?.name || "Task View"
@@ -101,14 +103,16 @@ export const TaskDetailsHeader = ({ task, onClose }: TaskDetailsHeaderProps) => 
                                     </div>
                                 )}
                             </div>
-                            <button className="p-2 hover:bg-gray-100 rounded text-gray-500"><Star size={20} /></button>
-                            <button onClick={handleOpenNewTab} className="p-2 hover:bg-gray-100 rounded text-gray-500"><ArrowSquareOut size={20} /></button>
-                            <button
-                                onClick={onClose}
-                                className="p-2 hover:bg-red-50 hover:text-red-600 rounded transition-colors"
-                            >
-                                <X size={20} weight="bold" />
+                            <button onClick={() => dispatch(toggleFavoriteThunk(task.id))} className="p-2 hover:bg-gray-100 rounded text-gray-500">
+                                <Star size={20} weight={task.is_favorited ? "fill" : "regular"} className={task.is_favorited ? "text-yellow-400" : ""} />
                             </button>
+                            <button onClick={handleOpenNewTab} className="p-2 hover:bg-gray-100 rounded text-gray-500"><ArrowSquareOut size={20} /></button>
+                        <button
+                            onClick={onClose}
+                            className="p-2 hover:bg-red-50 hover:text-red-600 rounded transition-colors"
+                        >
+                            <X size={20} weight="bold" />
+                        </button>
                         </div>
                     </div>
                 </div>

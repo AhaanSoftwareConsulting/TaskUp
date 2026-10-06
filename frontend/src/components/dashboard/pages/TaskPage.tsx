@@ -28,6 +28,7 @@ export const TaskPage = () => {
       task={task}
       status={status}
       onClose={() => navigate(-1)}
+      variant="page"
     />
   );
 };
