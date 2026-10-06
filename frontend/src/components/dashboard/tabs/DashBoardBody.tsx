@@ -32,6 +32,9 @@ export const DashBoardBody = () => {
   const dispatch = useAppDispatch();
 
   
+const msToHours = (ms: number = 0) => {
+  return (Number(ms) / 3600000).toFixed(1);
+};
 
   const task = useAppSelector((state) => state.task.task)
   // Handle outside clicks for menus and inputs
@@ -297,7 +300,7 @@ export const DashBoardBody = () => {
                       {/* LOGGED TIME */}
                       <div className="flex items-center gap-1 bg-gray-50 px-2 py-1 rounded">
                         <ClockIcon size={12} />
-                        {t.timeManagement?.total_logged_time ?? 0}h
+                        {msToHours(t.timeManagement?.total_logged_time ?? 0)}h
                       </div>
                     </div>
                   </div>
