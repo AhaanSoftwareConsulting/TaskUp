@@ -420,7 +420,8 @@ const toggleTimer = async (req, res) => {
 
   if (existing) {
     const startTime = new Date(existing.active_start_time);
-    const workDone = Math.min(now.getTime() - startTime.getTime(), MAX_SESSION_MS);
+    const rawWorkDone = now.getTime() - startTime.getTime();
+const workDone = Math.min(rawWorkDone, MAX_SESSION_MS);
 
     const deadline = task.due_date ? new Date(task.due_date).getTime() : null;
     const goalMs = (task.estimated_time || 0) * 3600000;
