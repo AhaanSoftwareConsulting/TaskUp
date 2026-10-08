@@ -11,6 +11,7 @@ import { ResetPasswordView } from './components/redux/features/User/login/ResetP
 import { LoginView } from './components/redux/features/User/login/LoginView';
 import { ToastProvider } from './components/hooks/useToast';
 import { VerifyEmailView } from './components/redux/features/User/login/VerifyEmailView';
+import { AppSkeleton } from './components/hooks/AppSkeleton';
 
 
 function App() {
@@ -26,11 +27,7 @@ function App() {
     }, [dispatch]);
 
     if (!isFetched) {
-        return (
-            <div className="flex items-center justify-center min-h-screen text-xl text-gray-700">
-                Loading Application Session...
-            </div>
-        );
+        return <AppSkeleton/>
     }
     return (
         <>
