@@ -17,12 +17,12 @@ import { deleteTask as deleteTaskThunk } from "../../redux/features/Task/taskSli
 export const DashBoardBody = () => {
   const [showColumnInput, setShowColumnInput] = useState(false);
   const [columnName, setColumnName] = useState("");
-  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [openMenuColumn, setOpenMenuColumn] = useState<string | null>(null);
   const [popupColumnId, setPopupColumnId] = useState<string | null>(null);
   const [columnToDelete, setColumnToDelete] = useState<Column | null>(null);
   const [openMenuTask, setOpenMenuTask] = useState<string | null>(null);
-  const [taskToDelete, setTaskToDelete] = useState<Task | null>(null)
+  const [taskToDelete, setTaskToDelete] = useState<Task | null>(null);
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const columnMenuRef = useRef<HTMLDivElement | null>(null);
   const columnInputRef = useRef<HTMLDivElement | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
@@ -37,6 +37,8 @@ const msToHours = (ms: number = 0) => {
 };
 
   const task = useAppSelector((state) => state.task.task)
+
+  const selectedTask = task.find((t) => t.id === selectedTaskId) ?? null;
   // Handle outside clicks for menus and inputs
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -179,7 +181,7 @@ const msToHours = (ms: number = 0) => {
                         }),
                       )
                     }
-                    onClick={() => setSelectedTask(t)}
+                    onClick={() => setSelectedTaskId(t.id)}
                     className="bg-white rounded-2xl p-4 shadow-sm hover:shadow-lg border border-gray-100 hover:border-gray-200 transition-all cursor-pointer group"
                   >
                     <div className="flex justify-between">
@@ -408,7 +410,7 @@ const msToHours = (ms: number = 0) => {
         <TaskDetails
           status={taskStatus(selectedTask)}
           task={selectedTask}
-          onClose={() => setSelectedTask(null)}
+          onClose={() => setSelectedTaskId(null)}
         />
 
       )}
