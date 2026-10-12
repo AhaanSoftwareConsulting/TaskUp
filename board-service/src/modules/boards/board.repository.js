@@ -1,14 +1,14 @@
 const { v4: uuidv4 } = require('uuid');
 const { pool, query } = require('../../config/database');
 
-async function create({ name, owner, memberIds = [] }) {
+async function create({ name, owner,description = null, memberIds = [] }) {
   const id = uuidv4();
   const allMembers = [...new Set([owner, ...memberIds])];
 
   const conn = await pool.getConnection();
   try {
     await conn.beginTransaction();
-    await conn.execute('INSERT INTO boards (id, name, owner) VALUES (?, ?, ?)', [id, name, owner]);
+    await conn.execute('INSERT INTO boards (id, name, description, owner) VALUES (?, ?, ?, ?)', [id, name, description || null, owner]);
     for (const userId of allMembers) {
       await conn.execute('INSERT INTO board_members (board_id, user_id) VALUES (?, ?)', [id, userId]);
     }
@@ -61,8 +61,8 @@ async function addMember(boardId, userId) {
   await query('INSERT IGNORE INTO board_members (board_id, user_id) VALUES (?, ?)', [boardId, userId]);
 }
 
-async function updateName(boardId, name) {
-  await query('UPDATE boards SET name = ? WHERE id = ?', [name, boardId]);
+async function updateDetails(boardId, { name, description }) {
+  await query('UPDATE boards SET name = ?, description = ? WHERE id = ?', [name, description || null, boardId]);
 }
 
 async function deleteById(boardId) {
@@ -77,4 +77,4 @@ async function removeMember(boardId, userId) {
 }
 
 // module.exports — add removeMember
-module.exports = { create, findById, findByMember, getMembers, isMember, addMember, removeMember, updateName, deleteById };
+module.exports = { create, findById, findByMember, getMembers, isMember, addMember, removeMember, updateDetails, deleteById };
