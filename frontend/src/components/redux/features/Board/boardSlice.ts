@@ -5,6 +5,7 @@ import type { Board } from "../../../types/board.Types";
 
 interface CreateBoardArgs {
     name: string;
+    description:string;
     members: string[];
 }
 
@@ -81,10 +82,10 @@ export const deleteBoard = createAsyncThunk("board/deleteBoard", async ({ boardI
     }
 })
 
-export const editBoard = createAsyncThunk<Board, { boardId: string, name: string }, { rejectValue: string }>("board/editBoard",
-    async ({ boardId, name }, { rejectWithValue }) => {
+export const editBoard = createAsyncThunk<Board, { boardId: string, name: string, description: string }, { rejectValue: string }>("board/editBoard",
+    async ({ boardId, name, description }, { rejectWithValue }) => {
         try {
-            const res = await axiosClient.put(`/api/boards/${boardId}`, { name }, { withCredentials: true })
+            const res = await axiosClient.put(`/api/boards/${boardId}`, { name, description }, { withCredentials: true })
             return res.data as Board
         }
         catch (error: any) {

@@ -15,11 +15,11 @@ async function withMemberInfo(board) {
 }
 
 const createBoard = async (req, res) => {
-  const { name, members } = req.body;
+  const { name, description, members } = req.body;
   const ownerId = req.user.id;
 
-  try {
-    const newBoard = await boardRepo.create({ name, owner: ownerId, memberIds: members || [] });
+  try { const cleanDescription = typeof description === 'string' ? description.trim().slice(0, 500) : null;
+    const newBoard = await boardRepo.create({ name,description: cleanDescription, owner: ownerId, memberIds: members || [] });
 
     const others = (members || []).filter((id) => id && id !== ownerId);
     await Promise.all(
@@ -133,26 +133,31 @@ const deleteBoard = async (req, res) => {
 
 const editBoard = async (req, res) => {
   const { boardId } = req.params;
-  const { name } = req.body;
+  const { name, description } = req.body;
   if (!name || name.trim() === '') {
-    return res.status(403).json({ message: 'board name is not found' });
+    return res.status(400).json({ message: 'Board name is required' });
   }
   try {
     const board = await boardRepo.findById(boardId);
-    if (!board) {
-      return res.status(404).json({ message: 'board is not found' });
-    }
-    if (String(board.owner) !== String(req.user.id)) {
-      return res.status(400).json({ message: 'only owner can edit the board' });
-    }
-    await boardRepo.updateName(boardId, name);
+    if (!board) return res.status(404).json({ message: 'board is not found' });
 
+    // Before: owner only. Your sidebar shows Edit to every manager/CEO,
+    // so a manager who isn't the owner was getting a 400.
+    const canEdit =
+      String(board.owner) === String(req.user.id) || ['manager', 'ceo'].includes(req.user.role);
+    if (!canEdit) return res.status(403).json({ message: 'Only the owner, a manager or the CEO can edit this board' });
+
+    const nextDescription =
+      description === undefined ? board.description : String(description).trim().slice(0, 500) || null;
+
+    await boardRepo.updateDetails(boardId, { name: name.trim(), description: nextDescription });
     const updated = await boardRepo.findById(boardId);
     return res.status(200).json(await withMemberInfo(updated));
   } catch (error) {
     return res.status(500).json({ message: 'Internal server error' });
   }
 };
+
 // board.controller.js — add
 const removeMemberFromBoard = async (req, res) => {
   const { boardId, memberId } = req.params;

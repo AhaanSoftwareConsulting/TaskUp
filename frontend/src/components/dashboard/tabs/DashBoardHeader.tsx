@@ -35,11 +35,13 @@ export const DashBoardHeader = () => {
                     <div className="w-10 h-10 rounded-full bg-black text-white font-semibold text-lg flex items-center justify-center shadow-md">
                         {board.name.charAt(0).toUpperCase()}
                     </div>
-                    <div>
-                        <h2 className="text-lg font-semibold text-gray-900 -my-2">{board.name}</h2>
-                        <span className="text-xs font-medium text-gray-500 ">
-                            Project members & collaboration
-                        </span>
+                    <div >
+                        <h2 className="text-lg font-semibold text-gray-900 -my-2 pb-1.5">{board.name}</h2>
+                        {board.description && (
+                            <span className="block text-xs font-medium text-gray-500 line-clamp-2 max-w-xl">
+                                {board.description}
+                            </span>
+                        )}
                     </div>
                 </div>
                 <div className="flex items-center gap-3">
