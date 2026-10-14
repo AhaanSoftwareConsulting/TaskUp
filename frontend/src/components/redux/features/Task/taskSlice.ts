@@ -162,37 +162,37 @@ export const deleteFiles = createAsyncThunk<Task, { taskId: string; fileId: stri
 );
 
 export const toggleTimer = createAsyncThunk<
-    Task,
-    { taskId: string },
-    { rejectValue: string }
+  Task,
+  { taskId: string },
+  { rejectValue: string }
 >("task/toggleTimer", async ({ taskId }, { rejectWithValue }) => {
-    try {
-        const res = await axiosClient.post(
-            `/api/tasks/${taskId}/timer`,
-            {},
-            { withCredentials: true },
-        );
-
-        return res.data;
-    } catch (error: any) {
-        const errorData = error.response?.data;
-
-        // Another timer is already running
-        if (errorData?.code === "TIMER_ALREADY_RUNNING") {
-            return rejectWithValue(
-                JSON.stringify({
-                    code: errorData.code,
-                    message: errorData.message,
-                    activeTaskId: errorData.activeTaskId,
-                }),
-            );
-        }
-
-        // Handle other errors
-        return rejectWithValue(
-            errorData?.message || error.message || "Failed to toggle timer",
-        );
+  try {
+    const res = await axiosClient.post(
+      `/api/tasks/${taskId}/timer`,
+      {},
+      { withCredentials: true },
+    );
+ 
+    return res.data;
+  } catch (error: any) {
+    const errorData = error.response?.data;
+ 
+    // Another timer is already running
+    if (errorData?.code === "TIMER_ALREADY_RUNNING") {
+      return rejectWithValue(
+        JSON.stringify({
+          code: errorData.code,
+          message: errorData.message,
+          activeTaskId: errorData.activeTaskId,
+        }),
+      );
     }
+ 
+    // Handle other errors
+    return rejectWithValue(
+      errorData?.message || error.message || "Failed to toggle timer",
+    );
+  }
 });
 
 export const toggleFavorite = createAsyncThunk<

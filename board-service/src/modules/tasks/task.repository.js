@@ -400,6 +400,23 @@ async function getFileRefsForTask(taskId) {
   ]);
   return [...direct, ...inComments];
 }
+async function getActiveTimerForUser(userId) {
+  const rows = await query(
+    `SELECT
+       tat.task_id,
+       tat.user_id,
+       tat.active_start_time,
+       t.title AS task_title,
+       t.board_id
+     FROM task_active_timers tat
+     INNER JOIN tasks t ON t.id = tat.task_id
+     WHERE tat.user_id = ?
+     LIMIT 1`,
+    [userId]
+  );
+ 
+  return rows[0] || null;
+}
 
 module.exports = {
   create,
@@ -428,5 +445,7 @@ module.exports = {
   startTimer,
   stopTimer,
   getActiveTimersForTask,
-  findFavoritesByUser
+  findFavoritesByUser,
+  getActiveTimerForUser,
+  getFileRefsForTask
 };
