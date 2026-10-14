@@ -11,6 +11,7 @@ export type Column = {
 export type Board = {
   id: string;
   name: string;
+  description:string | null;
   owner: User;
   members: User[];
   columns?: Column[];  // only present on GET /api/boards/:id, not the list endpoint

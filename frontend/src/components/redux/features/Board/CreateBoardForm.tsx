@@ -7,7 +7,8 @@ import UserSearchInput from "../../../dashboard/UserSearchInput";
 import { useToast } from "../../../hooks/useToast";
 
 interface BoardFormInputs {
-  full_name: string;
+  name: string;
+  description:string;
 }
 
 interface CreateBoardFormProps {
@@ -28,7 +29,7 @@ export const CreateBoardForm = ({ onClose }: CreateBoardFormProps) => {
 
   const [members, setMembers] = useState<{ id: string; full_name: string }[]>([]);
 
-  const handleAddMember = (user: { id: string; full_name: string }) => {
+  const handleAddMember = (user: { id: string; full_name: string;}) => {
     if (!members.find((m) => m.id === user.id)) {
       setMembers((prev) => [...prev, user]);
     }
@@ -43,7 +44,8 @@ export const CreateBoardForm = ({ onClose }: CreateBoardFormProps) => {
 
     dispatch(
       createBoard({
-        name: data.full_name,
+        name: data.name,
+        description:data.description,
         members: members.map((m) => m.id),
       })
     ).then((res) => {
@@ -84,7 +86,7 @@ export const CreateBoardForm = ({ onClose }: CreateBoardFormProps) => {
       {/* ================= BOARD NAME ================= */}
       <div>
         <input
-          {...register("full_name", { required: "Board name is required" })}
+          {...register("name", { required: "Board name is required" })}
           placeholder="Enter project name"
           className="
             w-full h-12 px-5 rounded-full
@@ -93,10 +95,17 @@ export const CreateBoardForm = ({ onClose }: CreateBoardFormProps) => {
             outline-none
           "
         />
-        {errors.full_name && (
-          <p className="text-red-500 text-xs mt-1">{errors.full_name.message}</p>
+        {errors.name && (
+          <p className="text-red-500 text-xs mt-1">{errors.name.message}</p>
         )}
       </div>
+      <textarea
+  {...register("description")}
+  maxLength={500}
+  placeholder="Description (optional)"
+  rows={3}
+  className="w-full px-6 py-4 border border-gray-300 rounded-3xl resize-none focus:outline-none focus:border-black"
+/>
 
       {/* ================= MEMBERS ================= */}
       <UserSearchInput

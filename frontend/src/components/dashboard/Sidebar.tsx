@@ -1,7 +1,7 @@
 import { NavLink, useNavigate } from "react-router-dom"
 import { useAppDispatch, useAppSelector } from "../redux/app/hook"
 import { useEffect, useState } from "react"
-import { deleteBoard, editBoard, fetchBoard } from "../redux/features/Board/boardSlice"
+import { deleteBoard, fetchBoard } from "../redux/features/Board/boardSlice"
 import { slugify } from '../hooks/slugify'
 import {
     HouseIcon,
@@ -20,6 +20,7 @@ import { logoutUser } from "../redux/features/User/login/loginSlice";
 import { CreateBoardForm } from "../redux/features/Board/CreateBoardForm"
 import AddUserModal from "../redux/features/User/AddUserModal"
 import { DeleteModal } from "../modal/DeleteModal"
+import { EditBoardModal } from "../modal/EditBoardModal"
 interface SidebarProps {
     collapsed: boolean;
     setCollapsed: React.Dispatch<React.SetStateAction<boolean>>;
@@ -31,14 +32,13 @@ export const Sidebar = ({ collapsed, setCollapsed }: SidebarProps) => {
     const [taskToDelete, setTaskToDelete] = useState<any>(null)
     const [openMenuId, setOpenMenuId] = useState<string | null>(null)
     const [boardToEdit, setBoardToEdit] = useState<any>(null)
-    const [editName, setEditName] = useState<string>("")
 
     const navigate = useNavigate()
     const baseRow =
         "flex items-center h-11 px-4 text-sm rounded-md transition-all";
     const active = "bg-black text-white";
     const inactive = "text-black hover:bg-black hover:text-white";
-    
+
     const dispatch = useAppDispatch();
     const user = useAppSelector(state => state.login.user)
     const board = useAppSelector(state => state.board.boards)
@@ -61,25 +61,7 @@ export const Sidebar = ({ collapsed, setCollapsed }: SidebarProps) => {
             console.error("Delete failed", error);
         }
     };
-    const handleEditSubmit = async () => {
-        if (!editName.trim()) return;
-        try {
-            const updatedBoard = await dispatch(editBoard({
-                boardId: boardToEdit.id,
-                name: editName
-            })).unwrap();
 
-            setBoardToEdit(null);
-            setEditName("");
-
-            // FIX: Update the URL to the new slug immediately
-            const newSlug = slugify(updatedBoard.name);
-            navigate(`${dashboardBase}/${newSlug}`, { replace: true });
-
-        } catch (error) {
-            console.error("Edit failed", error);
-        }
-    };
     const handleLogout = async () => {
         await dispatch(logoutUser()).unwrap();
         navigate("/", { replace: true });
@@ -117,13 +99,13 @@ export const Sidebar = ({ collapsed, setCollapsed }: SidebarProps) => {
                             {!collapsed && "Home"}
                         </div>
                     </NavLink>
-                   
-<NavLink to={`/${role}/dashboard/profile`} className={({ isActive }) => `${baseRow} ${isActive ? active : inactive}`}>
-    <div className={`flex items-center gap-3 ${collapsed ? "justify-center w-full" : ""}`}>
-        <UserCircleIcon size={18} />
-        {!collapsed && "Profile"}
-    </div>
-</NavLink>
+
+                    <NavLink to={`/${role}/dashboard/profile`} className={({ isActive }) => `${baseRow} ${isActive ? active : inactive}`}>
+                        <div className={`flex items-center gap-3 ${collapsed ? "justify-center w-full" : ""}`}>
+                            <UserCircleIcon size={18} />
+                            {!collapsed && "Profile"}
+                        </div>
+                    </NavLink>
                     <NavLink to={`${dashboardBase}/tasks?scope=${(role === 'manager' || role === 'ceo') ? 'all' : 'mine'}`}
                         className={({ isActive }) => `${baseRow} ${isActive ? active : inactive} `}>
                         <div
@@ -180,7 +162,7 @@ export const Sidebar = ({ collapsed, setCollapsed }: SidebarProps) => {
                                             {(role === "manager" || role === "ceo") && (
                                                 <button
                                                     onClick={(e) => {
-                                                        e.preventDefault(); 
+                                                        e.preventDefault();
                                                         e.stopPropagation();
                                                         setOpenMenuId(isMenuOpen ? null : b.id);
                                                     }}
@@ -198,12 +180,7 @@ export const Sidebar = ({ collapsed, setCollapsed }: SidebarProps) => {
                                                 />
                                                 <div className="absolute right-0 top-9 w-28 bg-white border border-gray-200 rounded-lg shadow-xl z-20 py-1 overflow-hidden">
                                                     <button
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            setBoardToEdit(b);
-                                                            setEditName(b.name);
-                                                            setOpenMenuId(null);
-                                                        }}
+                                                        onClick={(e) => { e.stopPropagation(); setBoardToEdit(b); setOpenMenuId(null); }}
                                                         className="w-full text-left px-4 py-2 text-xs text-gray-700 hover:bg-gray-100 flex items-center gap-2"
                                                     >
                                                         Edit
@@ -240,22 +217,22 @@ export const Sidebar = ({ collapsed, setCollapsed }: SidebarProps) => {
                             </div>
                         </button>
                     )}
-                     {(role === "manager" || role === "ceo") && (
-                    <NavLink
-                        to={`/${role}/dashboard/teams`}
-                        className={({ isActive }) =>
-                            `${baseRow} ${isActive ? active : inactive}`
-                        }
-                    >
-                        <div
-                            className={`flex items-center gap-3 ${collapsed ? "justify-center w-full" : ""
-                                }`}
+                    {(role === "manager" || role === "ceo") && (
+                        <NavLink
+                            to={`/${role}/dashboard/teams`}
+                            className={({ isActive }) =>
+                                `${baseRow} ${isActive ? active : inactive}`
+                            }
                         >
-                            <UsersIcon size={18} />
-                            {!collapsed && "Teams"}
-                        </div>
-                    </NavLink>
-                     )}
+                            <div
+                                className={`flex items-center gap-3 ${collapsed ? "justify-center w-full" : ""
+                                    }`}
+                            >
+                                <UsersIcon size={18} />
+                                {!collapsed && "Teams"}
+                            </div>
+                        </NavLink>
+                    )}
                     <button
                         onClick={() => setCollapsed((p) => !p)}
                         className="flex items-center h-11 w-full justify-center"
@@ -293,50 +270,16 @@ export const Sidebar = ({ collapsed, setCollapsed }: SidebarProps) => {
             )}
             {taskToDelete && (
                 <DeleteModal
-                item={taskToDelete}
-                itemLabel="board"
-                getName={(board)=>board.name}
-                getId={(board)=>board.id}
-                onCancel={()=>setTaskToDelete(null)}
-                onConfirm={handleDelete}
+                    item={taskToDelete}
+                    itemLabel="board"
+                    getName={(board) => board.name}
+                    getId={(board) => board.id}
+                    onCancel={() => setTaskToDelete(null)}
+                    onConfirm={handleDelete}
                 />
             )}
             {boardToEdit && (
-                <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-                    <div className="bg-white rounded-xl p-6 w-96 shadow-lg" onClick={(e) => e.stopPropagation()}>
-                        <h2 className="text-lg font-bold text-gray-800 mb-3">
-                            Edit Board Name
-                        </h2>
-
-                        <div className="mb-6">
-                            <label className="block text-xs font-medium text-gray-500 mb-1">Board Name</label>
-                            <input
-                                type="text"
-                                value={editName}
-                                onChange={(e) => setEditName(e.target.value)}
-                                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black"
-                                autoFocus
-                            />
-                        </div>
-
-                        <div className="flex justify-end gap-3">
-                            <button
-                                onClick={() => setBoardToEdit(null)}
-                                className="px-4 py-2 text-sm rounded-lg bg-gray-100 hover:bg-gray-200"
-                            >
-                                Cancel
-                            </button>
-
-                            <button
-                                onClick={handleEditSubmit}
-                                disabled={!editName.trim()}
-                                className="px-4 py-2 text-sm rounded-lg bg-black text-white hover:bg-gray-800 disabled:bg-gray-300"
-                            >
-                                Save Changes
-                            </button>
-                        </div>
-                    </div>
-                </div>
+                <EditBoardModal boardId={boardToEdit.id} onClose={() => setBoardToEdit(null)} />
             )}
         </>
     )
