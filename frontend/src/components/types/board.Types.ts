@@ -34,11 +34,16 @@ export type TimeManagement = {
   activeTimers: { user: User; active_start_time: string }[];
 };
 
+export type CommentBlock =
+  | { type: "text"; text: string }
+  | { type: "file"; attachment_id: string };
+
 export type Comment = {
   id: string;
   task_id: string;
   user: User | null;
   text: string | null;
+  blocks: CommentBlock[] | null; 
   attachments: Attachment[];
   created_at: string;
 };
@@ -60,9 +65,13 @@ export type Attachment = {
   id: string;
   fileName: string;
   fileUrl: string;
-  fileType?: string | null;
+  downloadUrl: string;
+  previewUrl: string | null;
+  fileType: string | null;
+  size: number | null;
+  isImage: boolean;
   uploadedBy: User | null;
-  createdAt?: string;
+  createdAt?: string | null;
 };
 
 export type Task = {

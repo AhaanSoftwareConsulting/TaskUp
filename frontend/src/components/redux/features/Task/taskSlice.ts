@@ -93,15 +93,44 @@ export const deleteTask = createAsyncThunk("task/deleteColumn", async ({ taskId 
     }
 })
 
-export const addComment = createAsyncThunk<Task, { taskId: string; formData: FormData }, { rejectValue: string }>(
-    "tasks/addComment",
-    async ({ taskId, formData }, { rejectWithValue }) => {
+export const addComment = createAsyncThunk<
+    Task,
+    { taskId: string; formData: FormData; onProgress?: (percent: number) => void },
+    { rejectValue: string }
+>("tasks/addComment", async ({ taskId, formData, onProgress }, { rejectWithValue }) => {
+    try {
+        const res = await axiosClient.post(`/api/tasks/${taskId}/comments`, formData, {
+            withCredentials: true,
+            onUploadProgress: (e) => { if (e.total && onProgress) onProgress(Math.round((e.loaded * 100) / e.total)); },
+        });
+        return res.data;
+    } catch (err: any) {
+        return rejectWithValue(err.response?.data?.message || err.message);
+    }
+});
+
+export const uploadFiles = createAsyncThunk<
+    Task,
+    { taskId: string; formData: FormData; onProgress?: (percent: number) => void },
+    { rejectValue: string }
+>("task/uploadfiles", async ({ taskId, formData, onProgress }, { rejectWithValue }) => {
+    try {
+        const res = await axiosClient.post(`/api/tasks/${taskId}/upload`, formData, {
+            withCredentials: true,
+            onUploadProgress: (e) => { if (e.total && onProgress) onProgress(Math.round((e.loaded * 100) / e.total)); },
+        });
+        return res.data;
+    } catch (err: any) {
+        return rejectWithValue(err.response?.data?.message || err.message);
+    }
+});
+
+export const deleteFiles = createAsyncThunk<Task, { taskId: string; fileId: string }, { rejectValue: string }>(
+    "task/deleteFiles",
+    async ({ taskId, fileId }, { rejectWithValue }) => {
         try {
-            const response = await axiosClient.post(`/api/tasks/${taskId}/comments`, formData, {
-                headers: { 'Content-Type': 'multipart/form-data' },
-                withCredentials: true,
-            });
-            return response.data;
+            const res = await axiosClient.delete(`/api/tasks/${taskId}/upload/${fileId}`, { withCredentials: true });
+            return res.data;
         } catch (err: any) {
             return rejectWithValue(err.response?.data?.message || err.message);
         }
@@ -120,27 +149,7 @@ export const toggleTimer = createAsyncThunk<Task, { taskId: string }, { rejectVa
     }
 );
 
-export const uploadFiles = createAsyncThunk<Task, { taskId: string; formData: FormData }, { rejectValue: string }>("task/uploadfiles",
-    async ({ taskId, formData }, { rejectWithValue }) => {
-        try {
-            const res = await axiosClient.post(`api/tasks/${taskId}/upload`, formData, { headers: { 'Content-Type': 'multipart/formData' }, withCredentials: true })
-            return res.data
-        }
-        catch (error: any) {
-            return rejectWithValue(error.response?.data?.message || error.message)
-        }
-    }
-)
 
-export const deleteFiles = createAsyncThunk("task/deleteFiles", async ({ taskId, fileId }: { taskId: string, fileId: string }, { rejectWithValue }) => {
-    try {
-        const res = await axiosClient.delete(`/api/tasks/${taskId}/upload/${fileId}`, { withCredentials: true })
-        return res.data
-    }
-    catch (error: any) {
-        return rejectWithValue(error.response?.data?.message || error.message)
-    }
-})
 export const toggleFavorite = createAsyncThunk<
     { taskId: string; is_favorited: boolean },
     string,
@@ -308,48 +317,50 @@ const taskSlice = createSlice({
                 state.error = action.payload as string;
             })
             .addCase(deleteFiles.fulfilled, (state, action) => {
-                state.selectedTask = action.payload
+                const i = state.task.findIndex((t) => t.id === action.payload.id);
+                if (i !== -1) state.task[i] = action.payload;
+                state.selectedTask = action.payload;
             })
             .addCase(getFavoriteTasks.fulfilled, (state, action) => {
                 state.favorites = action.payload;
             })
             .addCase(toggleFavorite.fulfilled, (state, action) => {
-    const { taskId, is_favorited } = action.payload;
+                const { taskId, is_favorited } = action.payload;
 
-    const task = state.task.find((t) => t.id === taskId);
+                const task = state.task.find((t) => t.id === taskId);
 
-    if (task) {
-        task.is_favorited = is_favorited;
-    }
+                if (task) {
+                    task.is_favorited = is_favorited;
+                }
 
-    if (state.selectedTask?.id === taskId) {
-        state.selectedTask.is_favorited = is_favorited;
-    }
+                if (state.selectedTask?.id === taskId) {
+                    state.selectedTask.is_favorited = is_favorited;
+                }
 
-    const favoriteTask = state.favorites.find((t) => t.id === taskId);
+                const favoriteTask = state.favorites.find((t) => t.id === taskId);
 
-    if (is_favorited && !favoriteTask && task) {
-        state.favorites.push({
-            ...task,
-            is_favorited: true,
-        });
-    }
+                if (is_favorited && !favoriteTask && task) {
+                    state.favorites.push({
+                        ...task,
+                        is_favorited: true,
+                    });
+                }
 
-    if (!is_favorited) {
-        state.favorites = state.favorites.filter(
-            (t) => t.id !== taskId
-        );
-    }
+                if (!is_favorited) {
+                    state.favorites = state.favorites.filter(
+                        (t) => t.id !== taskId
+                    );
+                }
 
-    state.loading = "fulfilled";
-    state.error = null;
-})
-.addCase(toggleFavorite.rejected, (state, action) => {
-    state.loading = "failed";
-    state.error = action.payload as string;
-})
+                state.loading = "fulfilled";
+                state.error = null;
+            })
+            .addCase(toggleFavorite.rejected, (state, action) => {
+                state.loading = "failed";
+                state.error = action.payload as string;
+            })
 
-            
+
     }
 })
 export default taskSlice.reducer

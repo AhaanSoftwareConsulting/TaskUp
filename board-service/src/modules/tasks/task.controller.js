@@ -1,5 +1,5 @@
-const fs = require('fs');
-const path = require('path');
+const { v4: uuidv4 } = require('uuid');
+const { uploadAll, destroyFile, downloadUrl, previewUrl, cleanFileName } = require('../../utils/cloudinary');
 const taskRepo = require('./task.repository');
 const columnRepo = require('../columns/column.repository');
 const boardRepo = require('../boards/board.repository');
@@ -7,6 +7,10 @@ const { getUserById, getUsersByIds } = require('../../utils/userClient');
 const { notifyUser, notifyBoardMembers, notifyAssigned } = require('../../utils/notifyClient');
 const config = require('../../config/config');
 const templates = require('../../utils/emailTemplates');
+
+const MENTION_RE = /@\[([^\]]{1,100})\]\(([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\)/gi;
+const MAX_COMMENT_CHARS = 5000;
+const bad = (message) => Object.assign(new Error(message), { status: 400 });
 /** Enrich the string user-ids on a task (assignedTo, comments.user_id, activityLog.user_id, attachments.uploaded_by) with display info. */
 async function withUserInfo(task) {
   if (!task) return task;
@@ -36,11 +40,17 @@ async function withUserInfo(task) {
     },
     assignedTo: (task.assignedTo || []).map(resolve),
     comments: (task.comments || []).map((c) => ({
-      ...c, user: resolve(c.user_id),
-      attachments: (c.attachments || []).map((a) => ({ ...a, uploadedBy: resolve(a.uploaded_by) })),
-    })),
+  id: c.id,
+  task_id: c.task_id,
+  user: resolve(c.user_id),
+  text: c.text,
+  blocks: parseBlocks(c.blocks),
+  attachments: (c.attachments || []).map((a) => formatAttachment(a, resolve)),
+  created_at: c.created_at,
+})),
+attachments: (task.attachments || []).map((a) => formatAttachment(a, resolve)),
     activityLog: (task.activityLog || []).map((a) => ({ ...a, user: resolve(a.user_id) })),
-    attachments: (task.attachments || []).map((a) => ({ ...a, uploadedBy: resolve(a.uploaded_by) })),
+    
   };
 }
 
@@ -256,7 +266,9 @@ const deleteTask = async (req, res) => {
 
     console.log(`User ${req.user.id} deleted task: ${task.title}`);
     // FK ON DELETE CASCADE removes comments/attachments/activity/daily logs.
-    await taskRepo.deleteById(taskId);
+    const refs = await taskRepo.getFileRefsForTask(taskId);
+await taskRepo.deleteById(taskId);
+Promise.all(refs.map((r) => destroyFile(r.public_id, r.resource_type))).catch(() => {});
 
     res.status(200).json('Task deleted successfully');
   } catch (error) {
@@ -266,145 +278,168 @@ const deleteTask = async (req, res) => {
 
 const addTaskComment = async (req, res) => {
   try {
-    if (!req.body) {
-      return res.status(400).json({
-        message: 'No data received. Ensure you are using multipart/form-data.',
-      });
-    }
-
     const { taskId } = req.params;
-    const { text } = req.body;
     const userId = req.user.id;
+    const files = req.files || [];
 
-    if (!text && (!req.files || req.files.length === 0)) {
-      return res.status(400).json({
-        message: 'Comment cannot be empty',
-      });
+    const access = await getAccessibleTask(req, res, taskId);
+    if (!access) return;
+    const { task, board } = access;
+
+    const draft = buildCommentBlocks(req.body || {}, files.length);
+    if (draft.length === 0) return res.status(400).json({ message: 'Comment cannot be empty' });
+
+    // 1) Cloudinary first; if the DB write fails we delete the files again.
+    const results = await uploadAll(files, `taskup/tasks/${taskId}/comments`);
+    const attachments = files.map((f, i) => ({
+      id: uuidv4(),
+      fileName: cleanFileName(f.originalname),
+      fileUrl: results[i].secure_url,
+      fileType: f.mimetype,
+      sizeBytes: results[i].bytes ?? f.size,
+      publicId: results[i].public_id,
+      resourceType: results[i].resource_type,
+      uploadedBy: userId,
+    }));
+
+    const blocks = draft.map((b) =>
+      b.type === 'file' ? { type: 'file', attachment_id: attachments[b.index].id } : b
+    );
+    // Plain version (mentions as "@Name") for activity text and notifications
+    const plain = draft
+      .filter((b) => b.type === 'text')
+      .map((b) => b.text.replace(MENTION_RE, '@$1'))
+      .join('\n');
+
+    try {
+      await taskRepo.addComment(taskId, { userId, text: plain, blocks, attachments });
+    } catch (dbErr) {
+      await Promise.all(results.map((r) => destroyFile(r.public_id, r.resource_type)));
+      throw dbErr;
     }
-
-    // Get task
-    const task = await taskRepo.findFull(taskId);
-
-
-    if (!task) {
-      return res.status(404).json({
-        message: 'Task not found',
-      });
-    }
-
-    // Get board
-    const board = await boardRepo.findById(task.board_id);
-
-    // Files
-    const commentAttachments = req.files
-      ? req.files.map((file) => ({
-        fileName: file.originalname,
-        fileUrl: `${config.uploads.baseUrl}/${file.filename}`,
-        fileType: file.mimetype,
-        uploadedBy: userId,
-      }))
-      : [];
-
-    // Save comment
-    await taskRepo.addComment(taskId, {
-      userId,
-      text: text || '',
-      attachments: commentAttachments,
-    });
-
-    // Activity log
-    const logAction =
-      commentAttachments.length > 0
-        ? `added a comment with ${commentAttachments.length} file(s)`
-        : `added a comment: "${text?.substring(0, 20)}..."`;
 
     await taskRepo.addActivityLog(taskId, {
       userId,
-      action: logAction,
+      action: attachments.length
+        ? `added a comment with ${attachments.length} file(s)`
+        : `added a comment: "${plain.slice(0, 40)}${plain.length > 40 ? '…' : ''}"`,
     });
 
-    // --------------------------------------------------
-    // NOTIFY TASK MEMBERS
-    // --------------------------------------------------
+    const full = await taskRepo.findFull(taskId);
 
-    // Get users assigned to this task
-    // --------------------------------------------------
-    // NOTIFY TASK MEMBERS / PREVIOUS COMMENTERS
-    // --------------------------------------------------
+    // Mentions come from the saved text, never from a separate client field,
+    // and only board members count (they're the only ones who can open the task).
+    const memberIds = new Set(board.members.map(String));
+    const mentionIds = [
+      ...new Set(
+        draft.filter((b) => b.type === 'text').flatMap((b) => [...b.text.matchAll(MENTION_RE)].map((m) => m[2]))
+      ),
+    ].filter((id) => memberIds.has(id) && id !== String(userId));
 
-    const assignedIds = (task.assignedTo || []).map(String);
-
-    const commenterIds = (task.comments || [])
-      .map((comment) => comment.user_id)
-      .filter(Boolean)
-      .map(String);
-
-    const recipientIds = [
+    // Assignees + earlier commenters get the generic "new comment"; mentioned people get only the mention.
+    const generalIds = [
       ...new Set([
-        ...assignedIds,
-        ...commenterIds,
+        ...(full.assignedTo || []).map(String),
+        ...(full.comments || []).map((c) => c.user_id).filter(Boolean).map(String),
       ]),
-    ].filter((id) => id !== String(userId));
+    ].filter((id) => id !== String(userId) && !mentionIds.includes(id));
 
-    console.log('Comment notify:', {
-      assignedIds,
-      commenterIds,
-      currentUserId: String(userId),
-      recipientIds,
-    });
-
-    if (recipientIds.length > 0) {
-      const [commentAuthor, users] = await Promise.all([
+    // Not awaited: the comment shows up instantly even if the notification service is slow.
+    (async () => {
+      const [author, usersById] = await Promise.all([
         getUserById(userId),
-        getUsersByIds(recipientIds),
+        getUsersByIds([...mentionIds, ...generalIds]),
       ]);
+      const authorName = author?.full_name || 'Someone';
+      const snippet = plain.replace(/\s+/g, ' ').slice(0, 300) || 'Shared an attachment';
+      const linkFor = (u) => `${config.frontend.url}/${u.role || 'employee'}/dashboard/tasks/${taskId}`;
+      const send = (id, title, message, template) => {
+        const u = usersById[id];
+        if (!u) return null;
+        return notifyUser({
+          userId: u.id,
+          title,
+          message,
+          email: u.email ? { to: u.email, ...template(linkFor(u)) } : undefined,
+        });
+      };
+      await Promise.all([
+        ...mentionIds.map((id) =>
+          send(id, 'You were mentioned', `${authorName} mentioned you on "${task.title}"`, (taskLink) =>
+            templates.mentioned({ taskTitle: task.title, boardName: board.name, mentionedBy: authorName, comment: snippet, taskLink }))),
+        ...generalIds.map((id) =>
+          send(id, 'New comment', `${authorName} commented on "${task.title}"`, (taskLink) =>
+            templates.commentAdded({ taskTitle: task.title, boardName: board.name, commentedBy: authorName, comment: snippet, taskLink }))),
+      ]);
+    })().catch((e) => console.error('comment notifications failed:', e.message));
 
-      console.log('Comment notification users:', users);
+    res.status(201).json(await withUserInfo(full, userId));
+  } catch (error) {
+    console.error('addTaskComment error:', error);
+    res.status(error.status || 500).json({ message: error.status ? error.message : 'Failed to post comment' });
+  }
+};
 
-      await Promise.all(
-        Object.values(users)
-          .filter(
-            (user) =>
-              user?.id &&
-              String(user.id) !== String(userId) &&
-              user.email
-          )
-          .map((user) =>
-            notifyUser({
-              userId: user.id,
+const uploadtaskFile = async (req, res) => {
+  try {
+    const { taskId } = req.params;
+    const access = await getAccessibleTask(req, res, taskId);
+    if (!access) return;
+    const files = req.files || [];
+    if (files.length === 0) return res.status(400).json({ message: 'No files received' });
 
-              title: 'New comment',
+    const results = await uploadAll(files, `taskup/tasks/${taskId}`);
+    const rows = files.map((f, i) => ({
+      id: uuidv4(),
+      fileName: cleanFileName(f.originalname),
+      fileUrl: results[i].secure_url,
+      fileType: f.mimetype,
+      sizeBytes: results[i].bytes ?? f.size,
+      publicId: results[i].public_id,
+      resourceType: results[i].resource_type,
+      uploadedBy: req.user.id,
+    }));
+    try {
+      await taskRepo.addAttachments(taskId, rows);
+    } catch (dbErr) {
+      await Promise.all(results.map((r) => destroyFile(r.public_id, r.resource_type)));
+      throw dbErr;
+    }
+    await taskRepo.addActivityLog(taskId, { userId: req.user.id, action: `uploaded ${rows.length} file(s)` });
 
-              message: `${commentAuthor?.full_name || 'Someone'
-                } commented on "${task.title}"`,
+    const updated = await taskRepo.findFull(taskId);
+    res.status(200).json(await withUserInfo(updated, req.user.id));
+  } catch (error) {
+    console.error('Upload error:', error);
+    res.status(error.status || 500).json({ message: error.status ? error.message : 'File upload failed' });
+  }
+};
 
-              email: {
-                to: user.email,
-                ...templates.commentAdded({
-                  taskTitle: task.title,
-                  boardName: board?.name,
-                  commentedBy:
-                    commentAuthor?.full_name || 'Someone',
-                  comment: text || 'Added an attachment',
-                  taskLink: `${config.frontend.url}/tasks/${taskId}`,
-                }),
-              },
-            })
-          )
-      );
+const deleteTaskFile = async (req, res) => {
+  try {
+    const { taskId, fileId } = req.params;
+    const access = await getAccessibleTask(req, res, taskId);
+    if (!access) return;
+
+    const attachment = await taskRepo.getAttachmentById(fileId);
+    if (!attachment || String(attachment.task_id) !== String(taskId)) {
+      return res.status(404).json({ message: 'Attachment not found' });
+    }
+    const canDelete =
+      String(attachment.uploaded_by) === String(req.user.id) || ['manager', 'ceo'].includes(req.user.role);
+    if (!canDelete) {
+      return res.status(403).json({ message: 'Only the uploader, a manager or the CEO can delete this file' });
     }
 
+    await taskRepo.deleteAttachment(fileId);
+    await destroyFile(attachment.public_id, attachment.resource_type || 'image');
+    await taskRepo.addActivityLog(taskId, { userId: req.user.id, action: `deleted attachment: ${attachment.file_name}` });
 
-    // Return updated task
     const updated = await taskRepo.findFull(taskId);
-
-    res.status(201).json(await withUserInfo(updated));
+    res.status(200).json(await withUserInfo(updated, req.user.id));
   } catch (error) {
-    console.error('Critical Save Error:', error);
-
-    res.status(500).json({
-      message: error.message,
-    });
+    console.error('Delete file error:', error);
+    res.status(500).json({ message: 'Delete failed' });
   }
 };
 
@@ -484,56 +519,7 @@ if (scope === 'favorites') {
   }
 };
 
-const uploadtaskFile = async (req, res) => {
-  try {
-    const { taskId } = req.params;
-    const task = await taskRepo.findById(taskId);
-    if (!task) return res.status(404).json({ message: 'Task not found' });
 
-    const files = req.files.map((file) => ({
-      fileName: file.originalname,
-      fileUrl: `${config.uploads.baseUrl}/${file.filename}`,
-      uploadedBy: req.user.id,
-    }));
-    await taskRepo.addAttachments(taskId, files);
-    await taskRepo.addActivityLog(taskId, { userId: req.user.id, action: `uploaded ${files.length} file(s)` });
-
-    const updated = await taskRepo.findFull(taskId);
-    res.status(200).json(await withUserInfo(updated));
-  } catch (error) {
-    console.error('Upload Error:', error);
-    res.status(500).json({ message: 'File upload failed', error: error.message });
-  }
-};
-
-const deleteTaskFile = async (req, res) => {
-  try {
-    const { taskId, fileId } = req.params;
-    const task = await taskRepo.findById(taskId);
-    if (!task) return res.status(404).json({ message: 'Task not found' });
-
-    const attachment = await taskRepo.getAttachmentById(fileId);
-    if (attachment) {
-      const fileName = attachment.file_url.split('/').pop();
-      const filePath = path.join(__dirname, '../../uploads', fileName);
-      if (fs.existsSync(filePath)) {
-        fs.unlinkSync(filePath);
-      }
-      await taskRepo.deleteAttachment(fileId);
-    }
-
-    await taskRepo.addActivityLog(taskId, {
-      userId: req.user.id,
-      action: `Deleted attachment: ${attachment?.file_name || 'Unknown'}`,
-    });
-
-    const updated = await taskRepo.findFull(taskId);
-    res.status(200).json(await withUserInfo(updated));
-  } catch (error) {
-    console.error('Delete Error:', error);
-    res.status(500).json({ message: 'Delete failed', error: error.message });
-  }
-};
 const toggleFavorite = async (req, res) => {
   try {
     const isFavorited = await taskRepo.toggleFavorite(req.params.taskId, req.user.id);
@@ -542,6 +528,67 @@ const toggleFavorite = async (req, res) => {
     res.status(500).json({ message: 'Failed to toggle favorite' });
   }
 };
+
+function parseBlocks(raw) {
+  if (!raw) return null;
+  try { return typeof raw === 'string' ? JSON.parse(raw) : raw; } catch { return null; }
+}
+function formatAttachment(a, resolve) {
+  const isImage = (a.file_type || '').startsWith('image/');
+  return {
+    id: a.id,
+    fileName: a.file_name,
+    fileUrl: a.file_url,
+    downloadUrl: a.public_id ? downloadUrl(a.file_url) : a.file_url,
+    previewUrl: isImage ? previewUrl(a.file_url) : null,
+    fileType: a.file_type || null,
+    size: a.size_bytes != null ? Number(a.size_bytes) : null,
+    isImage,
+    uploadedBy: resolve(a.uploaded_by),
+    createdAt: a.created_at || null,
+  };
+}
+
+async function getAccessibleTask(req, res, taskId) {
+  const task = await taskRepo.findById(taskId);
+  if (!task) { res.status(404).json({ message: 'Task not found' }); return null; }
+  const board = await boardRepo.findById(task.board_id);
+  if (!board || !board.members.some((m) => String(m) === String(req.user.id))) {
+    res.status(403).json({ message: 'You are not a member of this board' });
+    return null;
+  }
+  return { task, board };
+}
+
+/** Validates the composer's ordered blocks. File blocks refer to the uploaded files by index. */
+function buildCommentBlocks(body, fileCount) {
+  let raw;
+  if (body.blocks !== undefined) {
+    try { raw = JSON.parse(body.blocks); } catch { throw bad('Invalid comment content'); }
+    if (!Array.isArray(raw) || raw.length > 50) throw bad('Invalid comment content');
+  } else {
+    raw = []; // older clients: plain text first, then files
+    if (body.text) raw.push({ type: 'text', text: String(body.text) });
+    for (let i = 0; i < fileCount; i++) raw.push({ type: 'file', index: i });
+  }
+  const out = [];
+  const used = new Set();
+  let chars = 0;
+  for (const b of raw) {
+    if (b?.type === 'text' && typeof b.text === 'string') {
+      const text = b.text.trim();
+      if (!text) continue;
+      chars += text.length;
+      if (chars > MAX_COMMENT_CHARS) throw bad(`Comment is too long (max ${MAX_COMMENT_CHARS} characters)`);
+      out.push({ type: 'text', text });
+    } else if (b?.type === 'file' && Number.isInteger(b.index) && b.index >= 0 && b.index < fileCount && !used.has(b.index)) {
+      used.add(b.index);
+      out.push({ type: 'file', index: b.index });
+    }
+  }
+  for (let i = 0; i < fileCount; i++) if (!used.has(i)) out.push({ type: 'file', index: i });
+  return out;
+}
 
 module.exports = {
   uploadtaskFile,

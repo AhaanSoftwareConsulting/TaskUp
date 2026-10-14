@@ -228,22 +228,21 @@ async function addActivityLog(taskId, { userId, action, field = null, oldValue =
   );
 }
 
-async function addComment(taskId, { userId, text, attachments = [] }) {
+async function addComment(taskId, { userId, text, blocks = null, attachments = [] }) {
   const commentId = uuidv4();
   const conn = await pool.getConnection();
   try {
     await conn.beginTransaction();
-    await conn.execute('INSERT INTO task_comments (id, task_id, user_id, text) VALUES (?, ?, ?, ?)', [
-      commentId,
-      taskId,
-      userId || null,
-      text || '',
-    ]);
-    for (const att of attachments) {
+    await conn.execute(
+      'INSERT INTO task_comments (id, task_id, user_id, text, blocks) VALUES (?, ?, ?, ?, ?)',
+      [commentId, taskId, userId || null, text || '', blocks ? JSON.stringify(blocks) : null]
+    );
+    for (const a of attachments) {
       await conn.execute(
-        `INSERT INTO task_comment_attachments (id, comment_id, file_name, file_url, file_type, uploaded_by)
-         VALUES (?, ?, ?, ?, ?, ?)`,
-        [uuidv4(), commentId, att.fileName, att.fileUrl, att.fileType || null, att.uploadedBy || null]
+        `INSERT INTO task_comment_attachments
+           (id, comment_id, file_name, file_url, file_type, size_bytes, public_id, resource_type, uploaded_by)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [a.id, commentId, a.fileName, a.fileUrl, a.fileType || null, a.sizeBytes ?? null, a.publicId || null, a.resourceType || null, a.uploadedBy || null]
       );
     }
     await conn.commit();
@@ -258,16 +257,15 @@ async function addComment(taskId, { userId, text, attachments = [] }) {
 
 async function addAttachments(taskId, files) {
   const conn = await pool.getConnection();
-  const inserted = [];
   try {
     await conn.beginTransaction();
-    for (const file of files) {
-      const id = uuidv4();
+    for (const f of files) {
       await conn.execute(
-        `INSERT INTO task_attachments (id, task_id, file_name, file_url, uploaded_by) VALUES (?, ?, ?, ?, ?)`,
-        [id, taskId, file.fileName, file.fileUrl, file.uploadedBy || null]
+        `INSERT INTO task_attachments
+           (id, task_id, file_name, file_url, file_type, size_bytes, public_id, resource_type, uploaded_by)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [f.id, taskId, f.fileName, f.fileUrl, f.fileType || null, f.sizeBytes ?? null, f.publicId || null, f.resourceType || null, f.uploadedBy || null]
       );
-      inserted.push({ id, ...file });
     }
     await conn.commit();
   } catch (err) {
@@ -276,7 +274,6 @@ async function addAttachments(taskId, files) {
   } finally {
     conn.release();
   }
-  return inserted;
 }
 
 async function getAttachmentById(attachmentId) {
@@ -391,6 +388,18 @@ async function findFavoritesByUser(userId) {
   );
   return attachRelations(tasks);
 }
+async function getFileRefsForTask(taskId) {
+  const [direct, inComments] = await Promise.all([
+    query('SELECT public_id, resource_type FROM task_attachments WHERE task_id = ? AND public_id IS NOT NULL', [taskId]),
+    query(
+      `SELECT a.public_id, a.resource_type FROM task_comment_attachments a
+       JOIN task_comments c ON c.id = a.comment_id
+       WHERE c.task_id = ? AND a.public_id IS NOT NULL`,
+      [taskId]
+    ),
+  ]);
+  return [...direct, ...inComments];
+}
 
 module.exports = {
   create,
@@ -419,5 +428,6 @@ module.exports = {
   startTimer,
   stopTimer,
   getActiveTimersForTask,
-  findFavoritesByUser
+  findFavoritesByUser,
+  getFileRefsForTask
 };
