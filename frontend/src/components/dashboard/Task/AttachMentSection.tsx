@@ -4,7 +4,7 @@ import type { Attachment } from "../../types/board.Types";
 import { useAppDispatch, useAppSelector } from "../../redux/app/hook";
 import { deleteFiles, uploadFiles } from "../../redux/features/Task/taskSlice";
 import { useToast } from "../../hooks/useToast";
-import { ACCEPT, FileTypeIcon, MAX_FILES, formatBytes, validateFiles } from "../../utils/fileHelpers";
+import { ACCEPT, FileTypeIcon, MAX_FILES, formatBytes, validateFiles } from "../../utils/fileHelper";
 
 interface Props {
   taskId: string;

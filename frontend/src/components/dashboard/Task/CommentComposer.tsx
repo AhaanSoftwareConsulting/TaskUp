@@ -5,7 +5,7 @@ import { useAppDispatch } from "../../redux/app/hook";
 import { addComment } from "../../redux/features/Task/taskSlice";
 import { useToast } from "../../hooks/useToast";
 import { getAvatarColor } from "../../utils/avatarColor";
-import { ACCEPT, FileTypeIcon, formatBytes, validateFiles } from "../../utils/fileHelpers";
+import { ACCEPT, FileTypeIcon, formatBytes, validateFiles } from "../../utils/fileHelper";
 
 export const Avatar = ({ name, size = 32 }: { name?: string | null; size?: number }) => (
   <div
