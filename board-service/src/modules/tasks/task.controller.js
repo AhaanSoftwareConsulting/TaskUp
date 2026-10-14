@@ -443,116 +443,46 @@ const deleteTaskFile = async (req, res) => {
   }
 };
 
-const MAX_SESSION_MS = 8 * 3600000;
-
+const MAX_SESSION_MS = 8 * 3600000; 
 const toggleTimer = async (req, res) => {
   const { taskId } = req.params;
   const userId = req.user.id;
+  const task = await taskRepo.findById(taskId);
+  if (!task) return res.status(404).json({ message: 'Task not found' });
 
-  try {
-    const task = await taskRepo.findById(taskId);
+  const existing = await taskRepo.getActiveTimer(taskId, userId);
+  const now = new Date();
 
-    if (!task) {
-      return res.status(404).json({
-        message: "Task not found",
-      });
+  if (existing) {
+    const startTime = new Date(existing.active_start_time);
+    const rawWorkDone = now.getTime() - startTime.getTime();
+const workDone = Math.min(rawWorkDone, MAX_SESSION_MS);
+
+    const deadline = task.due_date ? new Date(task.due_date).getTime() : null;
+    const goalMs = (task.estimated_time || 0) * 3600000;
+    let sessionDelay = 0;
+    if (deadline && now.getTime() > deadline) {
+      sessionDelay = startTime.getTime() > deadline ? workDone : now.getTime() - deadline;
+    }
+    const totalAfterSession = Number(task.total_logged_time) + workDone;
+    if (goalMs > 0 && totalAfterSession > goalMs) {
+      sessionDelay = Math.max(sessionDelay, totalAfterSession - Math.max(Number(task.total_logged_time), goalMs));
     }
 
-    // Check whether this user already has a timer running
-    // on ANY task.
-    const runningTimer = await taskRepo.getActiveTimerForUser(userId);
+    await taskRepo.updateTimeManagement(taskId, {
+      delay: Number(task.time_delay || 0) + sessionDelay,
+      total_logged_time: totalAfterSession,
+    });
+    await taskRepo.stopTimer(taskId, userId);
 
-    const now = new Date();
-
-    // Case 1: A timer is already running on this task.
-    // Clicking the button should stop it.
-    if (
-      runningTimer &&
-      String(runningTimer.task_id) === String(taskId)
-    ) {
-      const startTime = new Date(runningTimer.active_start_time);
-
-      const rawWorkDone = now.getTime() - startTime.getTime();
-      const workDone = Math.min(
-        Math.max(rawWorkDone, 0),
-        MAX_SESSION_MS
-      );
-
-      const deadline = task.due_date
-        ? new Date(task.due_date).getTime()
-        : null;
-
-      const goalMs = (task.estimated_time || 0) * 3600000;
-
-      let sessionDelay = 0;
-
-      if (deadline && now.getTime() > deadline) {
-        sessionDelay =
-          startTime.getTime() > deadline
-            ? workDone
-            : now.getTime() - deadline;
-      }
-
-      const totalBefore = Number(task.total_logged_time || 0);
-      const totalAfter = totalBefore + workDone;
-
-      if (goalMs > 0 && totalAfter > goalMs) {
-        sessionDelay = Math.max(
-          sessionDelay,
-          totalAfter - Math.max(totalBefore, goalMs)
-        );
-      }
-
-      await taskRepo.updateTimeManagement(taskId, {
-        time_delay: Number(task.time_delay || 0) + sessionDelay,
-        total_logged_time: totalAfter,
-      });
-
-      await taskRepo.stopTimer(taskId, userId);
-
-      const todayStr = now.toISOString().split("T")[0];
-
-      await taskRepo.upsertDailyLog(
-        taskId,
-        userId,
-        todayStr,
-        workDone
-      );
-
-      const updated = await taskRepo.findFull(taskId);
-
-      return res.status(200).json({
-        message: "Timer stopped successfully",
-        task: await withUserInfo(updated),
-      });
-    }
-
-    // Case 2: Another task's timer is running.
-    // Do not start the new timer automatically.
-    if (runningTimer) {
-      return res.status(409).json({
-        code: "TIMER_ALREADY_RUNNING",
-        message: "Another task timer is already running.",
-        activeTaskId: String(runningTimer.task_id),
-      });
-    }
-
-    // Case 3: No timer is running. Start this task's timer.
+    const todayStr = now.toISOString().split('T')[0];
+    await taskRepo.upsertDailyLog(taskId, userId, todayStr, workDone);
+  } else {
     await taskRepo.startTimer(taskId, userId, now);
-
-    const updated = await taskRepo.findFull(taskId);
-
-    return res.status(200).json({
-      message: "Timer started successfully",
-      task: await withUserInfo(updated),
-    });
-  } catch (error) {
-    console.error("Toggle timer error:", error);
-
-    return res.status(500).json({
-      message: "Failed to toggle timer",
-    });
   }
+
+  const updated = await taskRepo.findFull(taskId);
+  res.status(200).json(await withUserInfo(updated));
 };
 
 const getTasks = async (req, res) => {

@@ -3,7 +3,7 @@ import { CaretDownIcon, CaretUpIcon, DownloadSimpleIcon } from "@phosphor-icons/
 import { useAppSelector } from "../../redux/app/hook";
 import type { Attachment, Comment, CommentBlock } from "../../types/board.Types";
 import { Avatar, CommentComposer } from "./CommentComposer";
-import { FileTypeIcon, formatBytes } from "../../utils/fileHelpers";
+import { FileTypeIcon, formatBytes } from "../../utils/fileHelper";
 
 interface ActivityDetailsProps {
   taskId: string | undefined;
