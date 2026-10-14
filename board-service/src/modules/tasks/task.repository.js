@@ -364,6 +364,25 @@ async function getActiveTimer(taskId, userId) {
   const rows = await query('SELECT * FROM task_active_timers WHERE task_id = ? AND user_id = ?', [taskId, userId]);
   return rows[0] || null;
 }
+
+async function getActiveTimerForUser(userId) {
+  const rows = await query(
+    `SELECT
+       tat.task_id,
+       tat.user_id,
+       tat.active_start_time,
+       t.title AS task_title,
+       t.board_id
+     FROM task_active_timers tat
+     INNER JOIN tasks t ON t.id = tat.task_id
+     WHERE tat.user_id = ?
+     LIMIT 1`,
+    [userId]
+  );
+
+  return rows[0] || null;
+}
+
 async function startTimer(taskId, userId, startTime) {
   await query(
     'INSERT INTO task_active_timers (task_id, user_id, active_start_time) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE active_start_time = VALUES(active_start_time)',
@@ -425,6 +444,7 @@ module.exports = {
   getTimeByUser,
   toggleFavorite,
   getActiveTimer,
+  getActiveTimerForUser,
   startTimer,
   stopTimer,
   getActiveTimersForTask,

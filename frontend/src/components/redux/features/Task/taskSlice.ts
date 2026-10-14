@@ -1,5 +1,9 @@
-import { createAsyncThunk, createSlice, type PayloadAction } from "@reduxjs/toolkit";
-import type { Task, } from "../../../types/board.Types";
+import {
+    createAsyncThunk,
+    createSlice,
+    type PayloadAction,
+} from "@reduxjs/toolkit";
+import type { Task } from "../../../types/board.Types";
 import axiosClient from "../../../api/boardApiClient";
 import { deleteColumn } from "../Column/columnSlice";
 
@@ -7,52 +11,63 @@ interface taskState {
     task: Task[];
     favorites: Task[];
     selectedTask: Task | null;
-    loading: "idle" | "pending" | "fulfilled" | "failed",
-    error: string | null
+    loading: "idle" | "pending" | "fulfilled" | "failed";
+    error: string | null;
 }
 
 const initialState: taskState = {
     task: [],
     favorites: [],
     selectedTask: null,
-    loading: 'idle',
-    error: null
-}
+    loading: "idle",
+    error: null,
+};
 interface GetTasksParams {
     scope?: "mine" | "all" | "favorites";
     boardId?: string;
     columnId?: string;
 }
-export const getTasks = createAsyncThunk<Task[], GetTasksParams | undefined, { rejectValue: string }>(
-    "tasks/getTasks",
-    async (params, { rejectWithValue }) => {
+export const getTasks = createAsyncThunk<
+    Task[],
+    GetTasksParams | undefined,
+    { rejectValue: string }
+>("tasks/getTasks", async (params, { rejectWithValue }) => {
+    try {
+        const query = new URLSearchParams();
+
+        if (params?.scope) query.append("scope", params.scope);
+        if (params?.boardId) query.append("boardId", params.boardId);
+        if (params?.columnId) query.append("columnId", params.columnId);
+
+        const res = await axiosClient.get(`/api/tasks?${query.toString()}`, {
+            withCredentials: true,
+        });
+
+        return res.data;
+    } catch (err: any) {
+        return rejectWithValue(err.response?.data?.message || err.message);
+    }
+});
+
+export const addTask = createAsyncThunk<
+    Task,
+    { boardId: string; columnId: string; taskData: Partial<Task> },
+    { rejectValue: string }
+>(
+    "tasks/addTask",
+    async ({ boardId, columnId, taskData }, { rejectWithValue }) => {
         try {
-            const query = new URLSearchParams();
-
-            if (params?.scope) query.append("scope", params.scope);
-            if (params?.boardId) query.append("boardId", params.boardId);
-            if (params?.columnId) query.append("columnId", params.columnId);
-
-            const res = await axiosClient.get(`/api/tasks?${query.toString()}`, {
-                withCredentials: true,
-            });
-
+            const res = await axiosClient.post(
+                `/api/boards/${boardId}/columns/${columnId}/tasks`,
+                taskData,
+                { withCredentials: true },
+            );
             return res.data;
         } catch (err: any) {
             return rejectWithValue(err.response?.data?.message || err.message);
         }
-    }
+    },
 );
-
-export const addTask = createAsyncThunk<Task, { boardId: string, columnId: string, taskData: Partial<Task> }, { rejectValue: string }>("tasks/addTask", async ({ boardId, columnId, taskData }, { rejectWithValue }) => {
-    try {
-        const res = await axiosClient.post(`/api/boards/${boardId}/columns/${columnId}/tasks`, taskData, { withCredentials: true })
-        return res.data
-    }
-    catch (err: any) {
-        return rejectWithValue(err.response?.data?.message || err.message)
-    }
-})
 export const moveTask = createAsyncThunk<
     Task, // full Task object
     { taskId: string; newColumnId: string; newPosition: number },
@@ -64,34 +79,43 @@ export const moveTask = createAsyncThunk<
             const res = await axiosClient.patch(
                 `/api/tasks/${taskId}/move`,
                 { newColumnId, newPosition },
-                { withCredentials: true }
+                { withCredentials: true },
             );
             return res.data; // <-- full Task object
         } catch (err: any) {
             return rejectWithValue(err.response?.data?.message || err.message);
         }
-    }
+    },
 );
 
-export const updateTask = createAsyncThunk<Task, { taskId: string, update: Partial<Task> }, { rejectValue: string }>("task/updateTask", async ({ taskId, update }, { rejectWithValue }) => {
+export const updateTask = createAsyncThunk<
+    Task,
+    { taskId: string; update: Partial<Task> },
+    { rejectValue: string }
+>("task/updateTask", async ({ taskId, update }, { rejectWithValue }) => {
     try {
-        const res = await axiosClient.patch(`/api/tasks/${taskId}`, update, { withCredentials: true })
-        return res.data
+        const res = await axiosClient.patch(`/api/tasks/${taskId}`, update, {
+            withCredentials: true,
+        });
+        return res.data;
+    } catch (error: any) {
+        return rejectWithValue(error.response?.data?.message || error.message);
     }
-    catch (error: any) {
-        return rejectWithValue(error.response?.data?.message || error.message)
-    }
-})
+});
 
-export const deleteTask = createAsyncThunk("task/deleteColumn", async ({ taskId }: { taskId: string }, { rejectWithValue }) => {
-    try {
-        await axiosClient.delete(`/api/tasks/${taskId}`, { withCredentials: true })
-        return { taskId }
-    }
-    catch (error: any) {
-        return rejectWithValue(error.response?.data?.message | error.message)
-    }
-})
+export const deleteTask = createAsyncThunk(
+    "task/deleteColumn",
+    async ({ taskId }: { taskId: string }, { rejectWithValue }) => {
+        try {
+            await axiosClient.delete(`/api/tasks/${taskId}`, {
+                withCredentials: true,
+            });
+            return { taskId };
+        } catch (error: any) {
+            return rejectWithValue(error.response?.data?.message | error.message);
+        }
+    },
+);
 
 export const addComment = createAsyncThunk<
     Task,
@@ -137,60 +161,77 @@ export const deleteFiles = createAsyncThunk<Task, { taskId: string; fileId: stri
     }
 );
 
-export const toggleTimer = createAsyncThunk<Task, { taskId: string }, { rejectValue: string }>(
-    "task/toggleTimer",
-    async ({ taskId }, { rejectWithValue }) => {
-        try {
-            const res = await axiosClient.post(`/api/tasks/${taskId}/timer`, {}, { withCredentials: true });
-            return res.data;
-        } catch (error: any) {
-            return rejectWithValue(error.response?.data?.message || error.message);
-        }
-    }
-);
+export const toggleTimer = createAsyncThunk<
+    Task,
+    { taskId: string },
+    { rejectValue: string }
+>("task/toggleTimer", async ({ taskId }, { rejectWithValue }) => {
+    try {
+        const res = await axiosClient.post(
+            `/api/tasks/${taskId}/timer`,
+            {},
+            { withCredentials: true },
+        );
 
+        return res.data;
+    } catch (error: any) {
+        const errorData = error.response?.data;
+
+        // Another timer is already running
+        if (errorData?.code === "TIMER_ALREADY_RUNNING") {
+            return rejectWithValue(
+                JSON.stringify({
+                    code: errorData.code,
+                    message: errorData.message,
+                    activeTaskId: errorData.activeTaskId,
+                }),
+            );
+        }
+
+        // Handle other errors
+        return rejectWithValue(
+            errorData?.message || error.message || "Failed to toggle timer",
+        );
+    }
+});
 
 export const toggleFavorite = createAsyncThunk<
     { taskId: string; is_favorited: boolean },
     string,
     { rejectValue: string }
->(
-    "task/toggleFavorite",
-    async (taskId, { rejectWithValue }) => {
-        try {
-            const res = await axiosClient.post(
-                `/api/tasks/${taskId}/favorite`,
-                {},
-                { withCredentials: true }
-            );
+>("task/toggleFavorite", async (taskId, { rejectWithValue }) => {
+    try {
+        const res = await axiosClient.post(
+            `/api/tasks/${taskId}/favorite`,
+            {},
+            { withCredentials: true },
+        );
 
-            return {
-                taskId,
-                is_favorited: res.data.is_favorited,
-            };
-        } catch (err: any) {
-            console.error("Toggle favorite error:", err.response?.data || err);
+        return {
+            taskId,
+            is_favorited: res.data.is_favorited,
+        };
+    } catch (err: any) {
+        console.error("Toggle favorite error:", err.response?.data || err);
 
-            return rejectWithValue(
-                err.response?.data?.message || err.message
-            );
-        }
+        return rejectWithValue(err.response?.data?.message || err.message);
     }
-);
+});
 
-export const getFavoriteTasks = createAsyncThunk<Task[], void, { rejectValue: string }>(
-    "tasks/getFavorites",
-    async (_, { rejectWithValue }) => {
-        try {
-            const res = await axiosClient.get(`/api/tasks?scope=favorites`, { withCredentials: true });
-            return res.data;
-        } catch (err: any) {
-            return rejectWithValue(err.response?.data?.message || err.message);
-        }
+export const getFavoriteTasks = createAsyncThunk<
+    Task[],
+    void,
+    { rejectValue: string }
+>("tasks/getFavorites", async (_, { rejectWithValue }) => {
+    try {
+        const res = await axiosClient.get(`/api/tasks?scope=favorites`, {
+            withCredentials: true,
+        });
+        return res.data;
+    } catch (err: any) {
+        return rejectWithValue(err.response?.data?.message || err.message);
     }
-)
-
-
+});
 
 const taskSlice = createSlice({
     name: "taskSlice",
@@ -198,21 +239,27 @@ const taskSlice = createSlice({
     reducers: {
         clearTasks: (state) => {
             state.task = [];
-        }
+        },
     },
     extraReducers: (builder) => {
         builder
-            .addCase(addTask.pending, (state) => { state.loading = "pending"; state.error = null; })
+            .addCase(addTask.pending, (state) => {
+                state.loading = "pending";
+                state.error = null;
+            })
             .addCase(addTask.fulfilled, (state, action) => {
                 state.loading = "fulfilled";
                 state.task.push(action.payload);
             })
-            .addCase(addTask.rejected, (state, action) => { state.loading = "failed"; state.error = action.payload as string; })
+            .addCase(addTask.rejected, (state, action) => {
+                state.loading = "failed";
+                state.error = action.payload as string;
+            })
 
             .addCase(moveTask.pending, (state, action) => {
                 state.loading = "pending";
                 const { taskId, newColumnId, newPosition } = action.meta.arg;
-                const taskToMove = state.task.find(t => t.id === taskId);
+                const taskToMove = state.task.find((t) => t.id === taskId);
                 if (taskToMove) {
                     taskToMove.column_id = newColumnId;
                     taskToMove.position = newPosition;
@@ -221,7 +268,7 @@ const taskSlice = createSlice({
             .addCase(moveTask.fulfilled, (state, action: PayloadAction<Task>) => {
                 state.loading = "fulfilled";
 
-                const index = state.task.findIndex(t => t.id === action.payload.id);
+                const index = state.task.findIndex((t) => t.id === action.payload.id);
 
                 if (index !== -1) {
                     state.task[index] = action.payload; // fully replace with server version
@@ -232,22 +279,36 @@ const taskSlice = createSlice({
                     state.selectedTask = action.payload;
                 }
             })
-            .addCase(moveTask.rejected, (state, action) => { state.loading = "failed"; state.error = action.payload as string; })
-            .addCase(updateTask.pending, (state) => { state.loading = "pending"; })
+            .addCase(moveTask.rejected, (state, action) => {
+                state.loading = "failed";
+                state.error = action.payload as string;
+            })
+            .addCase(updateTask.pending, (state) => {
+                state.loading = "pending";
+            })
             .addCase(updateTask.fulfilled, (state, action) => {
                 state.loading = "fulfilled";
-                const index = state.task.findIndex(t => t.id === action.payload.id);
+                const index = state.task.findIndex((t) => t.id === action.payload.id);
                 if (index !== -1) {
                     state.task[index] = { ...state.task[index], ...action.payload };
                 }
             })
-            .addCase(updateTask.rejected, (state, action) => { state.loading = "failed"; state.error = action.payload as string; })
-            .addCase(deleteTask.pending, (state) => { state.loading = "pending"; })
+            .addCase(updateTask.rejected, (state, action) => {
+                state.loading = "failed";
+                state.error = action.payload as string;
+            })
+            .addCase(deleteTask.pending, (state) => {
+                state.loading = "pending";
+            })
             .addCase(deleteTask.fulfilled, (state, action) => {
                 state.loading = "fulfilled";
-                state.task = state.task.filter(t => t.id !== (action.payload as any).taskId);
+                state.task = state.task.filter(
+                    (t) => t.id !== (action.payload as any).taskId,
+                );
             })
-            .addCase(deleteTask.rejected, (state) => { state.loading = "failed"; })
+            .addCase(deleteTask.rejected, (state) => {
+                state.loading = "failed";
+            })
             .addCase(addComment.pending, (state) => {
                 state.loading = "pending";
             })
@@ -255,7 +316,7 @@ const taskSlice = createSlice({
                 state.loading = "fulfilled";
 
                 // Update the task in the main array
-                const index = state.task.findIndex(t => t.id === action.payload.id);
+                const index = state.task.findIndex((t) => t.id === action.payload.id);
                 if (index !== -1) {
                     state.task[index] = {
                         ...state.task[index],
@@ -275,9 +336,42 @@ const taskSlice = createSlice({
             })
             .addCase(toggleTimer.fulfilled, (state, action) => {
                 state.loading = "fulfilled";
-                const index = state.task.findIndex(t => t.id === action.payload.id);
+                state.error = null;
+
+                const updatedTask = action.payload;
+
+                const index = state.task.findIndex(
+                    (task) => String(task.id) === String(updatedTask.id),
+                );
+
                 if (index !== -1) {
-                    state.task[index] = { ...state.task[index], ...action.payload };
+                    state.task[index] = {
+                        ...state.task[index],
+                        ...updatedTask,
+                    };
+                }
+
+                // Update the task currently open in the modal.
+                if (
+                    state.selectedTask &&
+                    String(state.selectedTask.id) === String(updatedTask.id)
+                ) {
+                    state.selectedTask = {
+                        ...state.selectedTask,
+                        ...updatedTask,
+                    };
+                }
+
+                // Update favorites if this task is present there.
+                const favoriteIndex = state.favorites.findIndex(
+                    (task) => String(task.id) === String(updatedTask.id),
+                );
+
+                if (favoriteIndex !== -1) {
+                    state.favorites[favoriteIndex] = {
+                        ...state.favorites[favoriteIndex],
+                        ...updatedTask,
+                    };
                 }
             })
 
