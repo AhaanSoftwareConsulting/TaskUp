@@ -11,7 +11,7 @@ export type Column = {
 export type Board = {
   id: string;
   name: string;
-  description:string | null;
+  description: string | null;
   owner: User;
   members: User[];
   columns?: Column[];  // only present on GET /api/boards/:id, not the list endpoint
@@ -43,9 +43,12 @@ export type Comment = {
   task_id: string;
   user: User | null;
   text: string | null;
-  blocks: CommentBlock[] | null; 
+  blocks: CommentBlock[] | null;
   attachments: Attachment[];
   created_at: string;
+  edited_at: string | null;
+  can_edit: boolean;
+  can_delete: boolean;
 };
 
 export type Activity = {
@@ -86,7 +89,7 @@ export type Task = {
 
   due_date: string | Date;
   start_date: string | Date;
-is_favorited: boolean;
+  is_favorited: boolean;
   column_id: string;
   board_id: string;
 

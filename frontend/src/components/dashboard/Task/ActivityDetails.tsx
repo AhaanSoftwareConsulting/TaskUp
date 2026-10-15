@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useRef, useState, memo } from "react";
-import { CaretDownIcon, CaretUpIcon, DownloadSimpleIcon } from "@phosphor-icons/react";
-import { useAppSelector } from "../../redux/app/hook";
+import { CaretDownIcon, CaretUpIcon, DownloadSimpleIcon, XIcon } from "@phosphor-icons/react";
+import { useAppDispatch, useAppSelector } from "../../redux/app/hook";
 import type { Attachment, Comment, CommentBlock } from "../../types/board.Types";
 import { Avatar, CommentComposer } from "./CommentComposer";
 import { FileTypeIcon, formatBytes } from "../../utils/fileHelper";
+import { useToast } from "../../hooks/useToast";
+import { deleteComment, editComment } from "../../redux/features/Comment/commentThunks";
 
 interface ActivityDetailsProps {
   taskId: string | undefined;
@@ -66,35 +68,141 @@ const AttachmentBlock = ({ a }: { a?: Attachment }) => {
   );
 };
 
-const CommentItem = ({ comment, mine }: { comment: Comment; mine: boolean }) => {
+const TOKEN = /@\[([^\]]+)\]\(([0-9a-f-]{36})\)/gi;
+
+const CommentEditor = ({ blocks, byId, saving, onSave, onCancel }: {
+  blocks: CommentBlock[]; byId: Map<string, Attachment>; saving: boolean;
+  onSave: (blocks: CommentBlock[]) => void; onCancel: () => void;
+}) => {
+  const mentionIds = useRef<Record<string, string>>({}); // "Full Name" -> id, so existing mentions survive the edit
+  // The textarea shows "@Name", not the raw "@[Name](id)" token.
+  const [draft, setDraft] = useState<CommentBlock[]>(() =>
+    blocks.map((b): CommentBlock =>
+      b.type === "file" ? b : {
+        type: "text",
+        text: b.text.replace(TOKEN, (_m, name: string, id: string) => { mentionIds.current[name] = id; return `@${name}`; }),
+      })
+  );
+
+  const retokenize = (text: string) =>
+    Object.keys(mentionIds.current).sort((a, b) => b.length - a.length)
+      .reduce((out, name) => out.split(`@${name}`).join(`@[${name}](${mentionIds.current[name]})`), text);
+
+  const next = draft
+    .map((b): CommentBlock => (b.type === "text" ? { ...b, text: retokenize(b.text).trim() } : b))
+    .filter((b) => b.type === "file" || b.text);
+  const canSave = next.length > 0 && !saving;
+
+  return (
+    <div
+      className="mt-1 space-y-2"
+      onKeyDown={(e) => {
+        if (e.key === "Escape") onCancel();
+        if (e.key === "Enter" && (e.ctrlKey || e.metaKey) && canSave) onSave(next);
+      }}
+    >
+      {draft.map((b, i) =>
+        b.type === "text" ? (
+          <textarea
+            key={i}
+            value={b.text}
+            rows={1}
+            autoFocus={i === 0}
+            ref={(el) => { if (el) { el.style.height = "auto"; el.style.height = `${el.scrollHeight}px`; } }}
+            onChange={(e) => setDraft((d) => d.map((x, j) => (j === i && x.type === "text" ? { ...x, text: e.target.value } : x)))}
+            className="w-full text-sm border border-gray-200 rounded-lg px-2 py-1.5 outline-none focus:border-blue-400 resize-none overflow-hidden"
+          />
+        ) : (
+          <div key={i} className="relative w-fit max-w-full">
+            <AttachmentBlock a={byId.get(b.attachment_id)} />
+            <button
+              onClick={() => setDraft((d) => d.filter((_, j) => j !== i))}
+              title="Remove file"
+              className="absolute -top-2 -right-2 bg-white border border-gray-200 rounded-full p-0.5 text-gray-500 hover:text-red-500"
+            >
+              <XIcon size={12} weight="bold" />
+            </button>
+          </div>
+        )
+      )}
+      <div className="flex items-center gap-2">
+        <button disabled={!canSave} onClick={() => onSave(next)} className="px-3 py-1 text-xs font-bold bg-black text-white rounded-md disabled:bg-gray-300">
+          {saving ? "Saving..." : "Save"}
+        </button>
+        <button onClick={onCancel} className="px-3 py-1 text-xs font-bold border rounded-md">Cancel</button>
+        <span className="text-[10px] text-gray-400">Esc to cancel · Ctrl+Enter to save</span>
+      </div>
+    </div>
+  );
+};
+
+const CommentItem = ({ comment, taskId, mine }: { comment: Comment; taskId: string; mine: boolean }) => {
+  const dispatch = useAppDispatch();
+  const showToast = useToast();
+  const [editing, setEditing] = useState(false);
+  const [busy, setBusy] = useState(false);
+
   const name = comment.user?.full_name ?? "Unknown";
   const byId = new Map(comment.attachments.map((a) => [a.id, a]));
   const blocks: CommentBlock[] = comment.blocks?.length
     ? comment.blocks
-    : [ // comments written before blocks existed: text, then files
+    : [
         ...(comment.text ? [{ type: "text", text: comment.text } as CommentBlock] : []),
         ...comment.attachments.map((a) => ({ type: "file", attachment_id: a.id }) as CommentBlock),
       ];
 
+  const save = async (next: CommentBlock[]) => {
+    setBusy(true);
+    try {
+      await dispatch(editComment({ taskId, commentId: comment.id, blocks: next })).unwrap();
+      setEditing(false);
+      showToast("Comment updated");
+    } catch (err) {
+      showToast(typeof err === "string" ? err : "Failed to update comment", "error");
+    } finally { setBusy(false); }
+  };
+
+  const remove = async () => {
+    if (!window.confirm("Delete this comment? Its files will be deleted too.")) return;
+    setBusy(true);
+    try {
+      await dispatch(deleteComment({ taskId, commentId: comment.id })).unwrap();
+      showToast("Comment deleted");
+    } catch (err) {
+      showToast(typeof err === "string" ? err : "Failed to delete comment", "error");
+      setBusy(false); // on success this component is gone
+    }
+  };
+
   return (
-    <div className="flex gap-3">
+    <div className="group flex gap-3">
       <Avatar name={name} />
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline gap-2">
           <span className="text-sm font-bold text-gray-800">{mine ? "You" : name}</span>
           <span className="text-[10px] text-gray-400">{getRelativeTime(comment.created_at)}</span>
-        </div>
-        <div className="mt-1 space-y-2">
-          {blocks.map((b, i) =>
-            b.type === "text" ? (
-              <p key={i} className="text-sm text-gray-700 whitespace-pre-wrap break-words leading-relaxed">
-                {renderText(b.text)}
-              </p>
-            ) : (
-              <AttachmentBlock key={i} a={byId.get(b.attachment_id)} />
-            )
+          {comment.edited_at && <span className="text-[10px] text-gray-400 italic">(edited)</span>}
+          {!editing && (
+            <span className="ml-auto flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+              {comment.can_edit && <button disabled={busy} onClick={() => setEditing(true)} className="text-[10px] font-bold text-gray-400 hover:text-blue-600">Edit</button>}
+              {comment.can_delete && <button disabled={busy} onClick={remove} className="text-[10px] font-bold text-gray-400 hover:text-red-600">Delete</button>}
+            </span>
           )}
         </div>
+
+        {editing ? (
+          <CommentEditor blocks={blocks} byId={byId} saving={busy} onSave={save} onCancel={() => setEditing(false)} />
+        ) : (
+          <div className="mt-1 space-y-2">
+            {blocks.map((b, i) =>
+              b.type === "text" ? (
+                <p key={i} className="text-sm text-gray-700 whitespace-pre-wrap break-words leading-relaxed">{renderText(b.text)}</p>
+              ) : (
+                <AttachmentBlock key={i} a={byId.get(b.attachment_id)} />
+              )
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -169,7 +277,7 @@ export const ActivityDetails = memo(({ taskId }: ActivityDetailsProps) => {
           <div ref={listRef} className="flex-grow min-h-0 overflow-y-auto space-y-5 pr-1">
             {comments.length === 0 && <p className="text-xs text-gray-400 italic">No comments yet. Start the conversation.</p>}
             {comments.map((c) => (
-              <CommentItem key={c.id} comment={c} mine={c.user?.id === me?.id} />
+              <CommentItem taskId={taskData.id} key={c.id} comment={c} mine={c.user?.id === me?.id} />
             ))}
           </div>
         </div>
