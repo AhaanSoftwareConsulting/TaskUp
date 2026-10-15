@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { PaperclipIcon, PaperPlaneRightIcon, XIcon } from "@phosphor-icons/react";
 import type { User } from "../../types/user.Types";
 import { useAppDispatch } from "../../redux/app/hook";
-import { addComment } from "../../redux/features/Task/taskSlice";
+import { addComment } from "../../redux/features/Comment/commentThunks";
 import { useToast } from "../../hooks/useToast";
 import { getAvatarColor } from "../../utils/avatarColor";
 import { ACCEPT, FileTypeIcon, formatBytes, validateFiles } from "../../utils/fileHelper";

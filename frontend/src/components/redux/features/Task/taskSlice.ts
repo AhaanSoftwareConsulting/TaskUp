@@ -6,6 +6,19 @@ import {
 import type { Task } from "../../../types/board.Types";
 import axiosClient from "../../../api/boardApiClient";
 import { deleteColumn } from "../Column/columnSlice";
+import { isAnyOf } from "@reduxjs/toolkit";
+import { addComment, editComment, deleteComment } from "../Comment/commentThunks";
+import { uploadFiles, deleteFiles } from "../Attachment/attachmentThunks";
+import { toggleFavorite } from "../Favorite/favoriteThunks";
+import { toggleTimer } from "../Timer/timerThunks";
+
+const upsertTask = (state: taskState, task: Task) => {
+    const i = state.task.findIndex((t) => t.id === task.id);
+    if (i !== -1) state.task[i] = task;
+    if (state.selectedTask?.id === task.id) state.selectedTask = task;
+};
+
+
 
 interface taskState {
     task: Task[];
@@ -117,106 +130,6 @@ export const deleteTask = createAsyncThunk(
     },
 );
 
-export const addComment = createAsyncThunk<
-    Task,
-    { taskId: string; formData: FormData; onProgress?: (percent: number) => void },
-    { rejectValue: string }
->("tasks/addComment", async ({ taskId, formData, onProgress }, { rejectWithValue }) => {
-    try {
-        const res = await axiosClient.post(`/api/tasks/${taskId}/comments`, formData, {
-            withCredentials: true,
-            onUploadProgress: (e) => { if (e.total && onProgress) onProgress(Math.round((e.loaded * 100) / e.total)); },
-        });
-        return res.data;
-    } catch (err: any) {
-        return rejectWithValue(err.response?.data?.message || err.message);
-    }
-});
-
-export const uploadFiles = createAsyncThunk<
-    Task,
-    { taskId: string; formData: FormData; onProgress?: (percent: number) => void },
-    { rejectValue: string }
->("task/uploadfiles", async ({ taskId, formData, onProgress }, { rejectWithValue }) => {
-    try {
-        const res = await axiosClient.post(`/api/tasks/${taskId}/upload`, formData, {
-            withCredentials: true,
-            onUploadProgress: (e) => { if (e.total && onProgress) onProgress(Math.round((e.loaded * 100) / e.total)); },
-        });
-        return res.data;
-    } catch (err: any) {
-        return rejectWithValue(err.response?.data?.message || err.message);
-    }
-});
-
-export const deleteFiles = createAsyncThunk<Task, { taskId: string; fileId: string }, { rejectValue: string }>(
-    "task/deleteFiles",
-    async ({ taskId, fileId }, { rejectWithValue }) => {
-        try {
-            const res = await axiosClient.delete(`/api/tasks/${taskId}/upload/${fileId}`, { withCredentials: true });
-            return res.data;
-        } catch (err: any) {
-            return rejectWithValue(err.response?.data?.message || err.message);
-        }
-    }
-);
-
-export const toggleTimer = createAsyncThunk<
-  Task,
-  { taskId: string },
-  { rejectValue: string }
->("task/toggleTimer", async ({ taskId }, { rejectWithValue }) => {
-  try {
-    const res = await axiosClient.post(
-      `/api/tasks/${taskId}/timer`,
-      {},
-      { withCredentials: true },
-    );
- 
-    return res.data;
-  } catch (error: any) {
-    const errorData = error.response?.data;
- 
-    // Another timer is already running
-    if (errorData?.code === "TIMER_ALREADY_RUNNING") {
-      return rejectWithValue(
-        JSON.stringify({
-          code: errorData.code,
-          message: errorData.message,
-          activeTaskId: errorData.activeTaskId,
-        }),
-      );
-    }
- 
-    // Handle other errors
-    return rejectWithValue(
-      errorData?.message || error.message || "Failed to toggle timer",
-    );
-  }
-});
-
-export const toggleFavorite = createAsyncThunk<
-    { taskId: string; is_favorited: boolean },
-    string,
-    { rejectValue: string }
->("task/toggleFavorite", async (taskId, { rejectWithValue }) => {
-    try {
-        const res = await axiosClient.post(
-            `/api/tasks/${taskId}/favorite`,
-            {},
-            { withCredentials: true },
-        );
-
-        return {
-            taskId,
-            is_favorited: res.data.is_favorited,
-        };
-    } catch (err: any) {
-        console.error("Toggle favorite error:", err.response?.data || err);
-
-        return rejectWithValue(err.response?.data?.message || err.message);
-    }
-});
 
 export const getFavoriteTasks = createAsyncThunk<
     Task[],
@@ -232,6 +145,13 @@ export const getFavoriteTasks = createAsyncThunk<
         return rejectWithValue(err.response?.data?.message || err.message);
     }
 });
+const replaceTask = (state: taskState, task: Task) => {
+    const i = state.task.findIndex((t) => t.id === task.id);
+    if (i !== -1) state.task[i] = task; // the server now always returns the complete task
+    if (state.selectedTask?.id === task.id) state.selectedTask = task;
+};
+
+
 
 const taskSlice = createSlice({
     name: "taskSlice",
@@ -375,10 +295,7 @@ const taskSlice = createSlice({
                 }
             })
 
-            .addCase(toggleTimer.rejected, (state, action) => {
-                state.loading = "failed";
-                state.error = action.payload as string;
-            })
+            
             .addCase(deleteColumn.fulfilled, (state, action) => {
                 const { columnId } = action.payload;
                 state.task = state.task.filter((t) => t.column_id !== columnId);
@@ -419,40 +336,26 @@ const taskSlice = createSlice({
                 state.favorites = action.payload;
             })
             .addCase(toggleFavorite.fulfilled, (state, action) => {
-                const { taskId, is_favorited } = action.payload;
-
-                const task = state.task.find((t) => t.id === taskId);
-
-                if (task) {
-                    task.is_favorited = is_favorited;
-                }
-
-                if (state.selectedTask?.id === taskId) {
-                    state.selectedTask.is_favorited = is_favorited;
-                }
-
-                const favoriteTask = state.favorites.find((t) => t.id === taskId);
-
-                if (is_favorited && !favoriteTask && task) {
-                    state.favorites.push({
-                        ...task,
-                        is_favorited: true,
-                    });
-                }
-
-                if (!is_favorited) {
-                    state.favorites = state.favorites.filter(
-                        (t) => t.id !== taskId
-                    );
-                }
-
-                state.loading = "fulfilled";
-                state.error = null;
+                const t = state.task.find((x) => x.id === action.payload.taskId);
+                if (t) t.is_favorited = action.payload.is_favorited;
             })
+            
             .addCase(toggleFavorite.rejected, (state, action) => {
                 state.loading = "failed";
                 state.error = action.payload as string;
             })
+            .addCase(editComment.fulfilled, (state, action) => replaceTask(state, action.payload))
+            .addCase(deleteComment.fulfilled, (state, action) => replaceTask(state, action.payload))
+
+            .addMatcher(
+                isAnyOf(
+                    addComment.fulfilled, editComment.fulfilled, deleteComment.fulfilled,
+                    uploadFiles.fulfilled, deleteFiles.fulfilled, toggleTimer.fulfilled,
+                    moveTask.fulfilled, updateTask.fulfilled,
+                ),
+                (state, action) => upsertTask(state, action.payload)
+            )
+
 
 
     }

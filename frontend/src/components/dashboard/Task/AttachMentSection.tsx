@@ -2,7 +2,7 @@ import { useRef, useState } from "react";
 import { CloudArrowUpIcon, PaperclipIcon, TrashIcon, DownloadSimpleIcon, ArrowSquareOutIcon } from "@phosphor-icons/react";
 import type { Attachment } from "../../types/board.Types";
 import { useAppDispatch, useAppSelector } from "../../redux/app/hook";
-import { deleteFiles, uploadFiles } from "../../redux/features/Task/taskSlice";
+import { deleteFiles, uploadFiles } from "../../redux/features/Attachment/attachmentThunks";
 import { useToast } from "../../hooks/useToast";
 import { ACCEPT, FileTypeIcon, MAX_FILES, formatBytes, validateFiles } from "../../utils/fileHelper";
 
