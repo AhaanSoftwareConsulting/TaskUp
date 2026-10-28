@@ -9,16 +9,16 @@ const ph = (a) => a.map(() => '?').join(',');
 function isValidId(id) {
   return typeof id === 'string' && UUID_RE.test(id);
 }
-async function create({ title, description, priority, due_date, start_date, columnId, boardId, assignedTo = [] }) {
+async function create({ title, description, priority, due_date, start_date, columnId, boardId, assignedTo = [], createdBy = null }) {
   const id = uuidv4();
   const conn = await pool.getConnection();
   try {
     await conn.beginTransaction();
     await conn.execute(
-      `INSERT INTO tasks (id, title, description, priority, due_date, start_date, column_id, board_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [id, title, description || null, priority || 'Medium', due_date || null, start_date || null, columnId, boardId]
-    );
+    `INSERT INTO tasks (id, title, description, priority, due_date, start_date, column_id, board_id, created_by)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [id, title, description || null, priority || 'Medium', due_date || null, start_date || null, columnId, boardId, createdBy]
+  );
     for (const userId of assignedTo.filter(isValidId)) {
   await conn.execute('INSERT IGNORE INTO task_assignees (task_id, user_id) VALUES (?, ?)', [id, userId]);
 }
@@ -188,6 +188,15 @@ async function findFavoritesByUser(userId) {
   );
   return attachRelations(tasks);
 }
+async function markClosed(taskId, userId, note) {
+  await query('UPDATE tasks SET closed_at = CURRENT_TIMESTAMP, closed_by = ?, closed_note = ? WHERE id = ?', [userId, note || null, taskId]);
+}
+async function markReopened(taskId) {
+  await query('UPDATE tasks SET closed_at = NULL, closed_by = NULL, closed_note = NULL WHERE id = ?', [taskId]);
+}
+async function addAssignee(taskId, userId) {
+  await query('INSERT IGNORE INTO task_assignees (task_id, user_id) VALUES (?, ?)', [taskId, userId]);
+}
 
 
 
@@ -205,5 +214,8 @@ module.exports = {
   bulkUpdatePositions,
   attachRelations,
   findFavoritesByUser,
-  listIdsInColumn
+  listIdsInColumn,
+  markClosed,
+  markReopened,
+  addAssignee
 };

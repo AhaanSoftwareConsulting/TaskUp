@@ -1,7 +1,7 @@
 
 import { Sidebar } from './Sidebar'
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
-import { HomeTab } from './tabs/HomeTab'
+import { HomeTab } from './Home/HomeTab'
 import { useAppSelector } from '../redux/app/hook'
 import { Topbar } from './TopBar'
 import { TasksPageWrapper } from './TaskPagewrapper'
@@ -9,7 +9,8 @@ import { useState } from 'react'
 import { BoardQueryWrapper } from '../hooks/BoardQueryWrapper'
 import { Teams } from './tabs/Team'
 import { TaskPage } from './pages/TaskPage'
-import { Profile } from './pages/Profile'
+import { Profile } from './profile/Profile'
+import { TaskHoursReport } from './report/TaskHoursReport'
 
 
 export const AdminDashboard = () => {
@@ -48,6 +49,7 @@ export const AdminDashboard = () => {
           <Route path="teams" element={<Teams />} />
           <Route path="tasks/:taskId" element={<TaskPage />} />
           <Route path="profile" element={<Profile />} />
+          <Route path="tasks/:taskId/hours" element={<TaskHoursReport />} />
         </Routes>
       </div>
     </div>

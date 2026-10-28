@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import type { Task, Column } from "../../types/board.Types";
 import TaskView from "../../redux/features/Task/taskView";
-import { CalendarBlankIcon, CaretDownIcon, ChatCircleIcon, ClockIcon, DotsThreeVerticalIcon, FlagIcon, PaperclipIcon, PlusIcon, X, } from "@phosphor-icons/react";
-import { TaskDetails } from "./TaskDetails";
+import { CalendarBlankIcon, CaretDownIcon, ChatCircleIcon, ClockIcon, DotsThreeVerticalIcon, FlagIcon, LockSimpleIcon, PaperclipIcon, PlusIcon, X, } from "@phosphor-icons/react";
+import { TaskDetails } from "../Task/details/TaskDetails";
 import { useAppDispatch, useAppSelector } from "../../redux/app/hook";
 import { getColumnColor } from "../../utils/columnColors";
 import { getAvatarColor } from "../../utils/avatarColor";
@@ -12,6 +12,7 @@ import { addColumn as addColumnThunk } from "../../redux/features/Column/columnS
 import { deleteColumn as deleteColumnThunk } from "../../redux/features/Column/columnSlice";
 import { moveTask as moveTaskThunk } from "../../redux/features/Task/taskSlice";
 import { deleteTask as deleteTaskThunk } from "../../redux/features/Task/taskSlice";
+import { formatShort } from "../../utils/dateHelpers";
 
 
 export const DashBoardBody = () => {
@@ -23,20 +24,27 @@ export const DashBoardBody = () => {
   const [openMenuTask, setOpenMenuTask] = useState<string | null>(null);
   const [taskToDelete, setTaskToDelete] = useState<Task | null>(null);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  const [showClosed, setShowClosed] = useState(false); 
   const columnMenuRef = useRef<HTMLDivElement | null>(null);
   const columnInputRef = useRef<HTMLDivElement | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
-
+  const task = useAppSelector((state) => state.task.task)
   const columns = useAppSelector((state) => state.column.columns);
   const board = useCurrentBoard()
   const dispatch = useAppDispatch();
+  const openTasks = task.filter((t) => !t.closed_at);
+const closedHere = board
+  ? task.filter((t) => t.board_id === board.id && t.closed_at)
+      .sort((a, b) => +new Date(b.closed_at!) - +new Date(a.closed_at!))
+  : [];
 
+
+  const msToHours = (ms: number = 0) => {
+    return (Number(ms) / 3600000).toFixed(1);
+  };
   
-const msToHours = (ms: number = 0) => {
-  return (Number(ms) / 3600000).toFixed(1);
-};
 
-  const task = useAppSelector((state) => state.task.task)
+
 
   const selectedTask = task.find((t) => t.id === selectedTaskId) ?? null;
   // Handle outside clicks for menus and inputs
@@ -80,7 +88,7 @@ const msToHours = (ms: number = 0) => {
       }
     };
     document.addEventListener("mousedown", handaleClickOutside)
-    return()=>{
+    return () => {
       document.removeEventListener("mousedown", handaleClickOutside)
     }
   }, [openMenuTask])
@@ -89,8 +97,6 @@ const msToHours = (ms: number = 0) => {
   if (!board) return null;
 
   const currentColumns: Column[] = columns[board.id] || [];
-
-  const taskStatus = (t: Task) => currentColumns.find((c) => c.id === t.column_id)?.name || null;
 
   return (
     <div className="relative h-full px-6 pt-6">
@@ -101,9 +107,7 @@ const msToHours = (ms: number = 0) => {
         {currentColumns.map((c) => {
           const color = getColumnColor(c.name);
 
-          const tasksInColumn = task
-            .filter((t) => t.column_id === c.id)
-            .sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
+          const tasksInColumn = openTasks.filter((t) => t.column_id === c.id).sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
 
           return (
             <div
@@ -170,7 +174,7 @@ const msToHours = (ms: number = 0) => {
                 {tasksInColumn.map((t, index) => (
                   <div
                     key={t.id}
-                    draggable
+                    draggable={!t.closed_at}
                     onDragStart={(e) =>
                       e.dataTransfer.setData(
                         "application/json",
@@ -188,6 +192,14 @@ const msToHours = (ms: number = 0) => {
                       <h3 className="font-semibold text-sm text-gray-800 group-hover:text-gray-900 transition capitalize">
                         {t.title}
                       </h3>
+                      {t.closed_at && (
+                        <span title="Closed" className="inline-flex">
+                          <LockSimpleIcon
+                            size={14}
+                            className="shrink-0 text-gray-400"
+                          />
+                        </span>
+                      )}
                       <div data-task-menu className="relative" onClick={(e) => e.stopPropagation()}>
 
                         <button
@@ -337,18 +349,18 @@ const msToHours = (ms: number = 0) => {
                 New Column
               </p>
               <div className="relative w-full group">
-              <select
-                value={columnName}
-                onChange={(e) => setColumnName(e.target.value)}
-                className="w-full appearance-none px-3 py-2 pr-12 text-sm rounded-lg border border-gray-300 bg-white text-gray-700 outline-none transition-all duration-200 cursor-pointer "
-              >
-                <option value="">Select Status</option>
-                <option value="Todo">Todo</option>
-                <option value="In Progress">In Progress</option>
-                <option value="Delay">Delay</option>
-                <option value="Completed">Completed</option>
-              </select>
-              <CaretDownIcon
+                <select
+                  value={columnName}
+                  onChange={(e) => setColumnName(e.target.value)}
+                  className="w-full appearance-none px-3 py-2 pr-12 text-sm rounded-lg border border-gray-300 bg-white text-gray-700 outline-none transition-all duration-200 cursor-pointer "
+                >
+                  <option value="">Select Status</option>
+                  <option value="Todo">Todo</option>
+                  <option value="In Progress">In Progress</option>
+                  <option value="Delay">Delay</option>
+                  <option value="Completed">Completed</option>
+                </select>
+                <CaretDownIcon
                   size={14}
                   weight="bold"
                   className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none transition-transform duration-200 group-focus-within:rotate-180"
@@ -378,7 +390,26 @@ const msToHours = (ms: number = 0) => {
           )}
         </div>
       </div>
-
+{closedHere.length > 0 && (
+  <div className="pb-8">
+    <button onClick={() => setShowClosed((s) => !s)} className="flex items-center gap-2 text-xs font-bold text-gray-500 hover:text-gray-800">
+      <LockSimpleIcon size={14} weight="bold" /> Closed ({closedHere.length})
+      <CaretDownIcon size={12} className={`transition-transform ${showClosed ? "rotate-180" : ""}`} />
+    </button>
+    {showClosed && (
+      <ul className="mt-3 divide-y divide-gray-100 rounded-xl border border-gray-100 bg-white">
+        {closedHere.map((t) => (
+          <li key={t.id}>
+            <button onClick={() => setSelectedTaskId(t.id)} className="flex w-full items-center justify-between gap-4 px-4 py-3 text-left hover:bg-gray-50">
+              <span className="truncate text-sm font-medium text-gray-700">{t.title}</span>
+              <span className="shrink-0 text-xs text-gray-400">Closed by {t.closed_by_user?.full_name ?? "someone"} · {formatShort(t.closed_at)}</span>
+            </button>
+          </li>
+        ))}
+      </ul>
+    )}
+  </div>
+)}
       {/* MODAL: CREATE TASK */}
       {popupColumnId && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
@@ -408,7 +439,7 @@ const msToHours = (ms: number = 0) => {
       )}
       {selectedTask && (
         <TaskDetails
-          status={taskStatus(selectedTask)}
+
           task={selectedTask}
           onClose={() => setSelectedTaskId(null)}
         />

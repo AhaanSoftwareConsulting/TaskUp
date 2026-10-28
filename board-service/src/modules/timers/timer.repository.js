@@ -41,6 +41,13 @@ async function stopAndRecord(taskId, userId, now, calcSession) {
       `INSERT INTO task_daily_logs (task_id, user_id, log_date, duration) VALUES (?, ?, ?, ?)
        ON DUPLICATE KEY UPDATE duration = duration + VALUES(duration)`,
       [taskId, userId, now.toISOString().slice(0, 10), workDone]);
+    if (workDone > 0) {
+  const startedMs = new Date(timers[0].active_start_time).getTime();
+  await conn.execute(
+    'INSERT INTO task_time_sessions (task_id, user_id, started_ms, ended_ms, duration_ms) VALUES (?, ?, ?, ?, ?)',
+    [taskId, userId, startedMs, startedMs + workDone, workDone]
+  );
+}
     await conn.commit();
     return { workDone, sessionDelay };
   } catch (err) { await conn.rollback(); throw err; } finally { conn.release(); }
@@ -56,4 +63,17 @@ async function findActiveForTasks(taskIds) {
   if (!taskIds.length) return [];
   return query(`SELECT task_id, user_id, active_start_time FROM task_active_timers WHERE task_id IN (${ph(taskIds)})`, taskIds);
 }
-module.exports = { findActiveForUser, start, stopAndRecord, sumByUserForTasks, findActiveForTasks };
+async function stopAllForTask(taskId, now, calcSession) {
+  const rows = await query('SELECT user_id FROM task_active_timers WHERE task_id = ?', [taskId]);
+  for (const r of rows) await stopAndRecord(taskId, r.user_id, now, calcSession);
+}
+
+
+async function findSessions(taskId) {
+  return query('SELECT id, user_id, started_ms, ended_ms, duration_ms FROM task_time_sessions WHERE task_id = ? ORDER BY started_ms ASC', [taskId]);
+}
+// DATE_FORMAT stops the DATE column being shifted by timezone conversion
+async function findDailyTotals(taskId) {
+  return query("SELECT user_id, DATE_FORMAT(log_date, '%Y-%m-%d') AS log_date, duration FROM task_daily_logs WHERE task_id = ?", [taskId]);
+}
+module.exports = { findActiveForUser, start, stopAndRecord, sumByUserForTasks, findActiveForTasks, stopAllForTask, findSessions, findDailyTotals };

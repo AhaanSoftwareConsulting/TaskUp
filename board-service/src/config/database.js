@@ -15,6 +15,7 @@ const pool = mysql.createPool({
   enableKeepAlive: true,       // TCP keepalive stops idle connections being cut
   keepAliveInitialDelay: 10000,
   connectTimeout: 15000,
+  timezone: 'Z'
 });
 pool.pool.on('connection', (conn) => conn.query("SET time_zone = '+00:00'"));
 const RETRYABLE = new Set(['ECONNRESET', 'PROTOCOL_CONNECTION_LOST', 'EPIPE', 'ETIMEDOUT']);

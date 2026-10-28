@@ -8,7 +8,6 @@ const userApiClient = axios.create({
   baseURL: import.meta.env.VITE_USER_API_URL,
   withCredentials: true, // still needed so the httpOnly refreshToken cookie rides along on /auth/* calls
   headers: {
-    'Content-Type': 'application/json',
     'Cache-Control': 'no-cache'
   },
   
