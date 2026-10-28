@@ -43,16 +43,21 @@ module.exports = {
   },
 
   frontend: {
-    resetPasswordUrl: process.env.FRONTEND_RESET_PASSWORD_URL ,
-    verifyEmailUrl: process.env.FRONTEND_VERIFY_EMAIL_URL ,
+    resetPasswordUrl: process.env.FRONTEND_RESET_PASSWORD_URL,
+    verifyEmailUrl: process.env.FRONTEND_VERIFY_EMAIL_URL,
   },
-hostingerMailApi: {
-  token: process.env.HOSTINGER_MAIL_API_TOKEN || '',
-},
+  hostingerMailApi: {
+    token: process.env.HOSTINGER_MAIL_API_TOKEN || '',
+  },
 
-cors: {
-  allowedOrigins: (process.env.ALLOWED_ORIGINS || 'http://localhost:5173')
-    .split(',')
-    .map(origin => origin.trim()),
-},
+  cors: {
+    allowedOrigins: (process.env.ALLOWED_ORIGINS || 'http://localhost:5173')
+      .split(',')
+      .map(origin => origin.trim()),
+  },
+  cloudinary: {
+    cloudName: process.env.CLOUDINARY_CLOUD_NAME || '',
+    apiKey: process.env.CLOUDINARY_API_KEY || '',
+    apiSecret: process.env.CLOUDINARY_API_SECRET || ''
+  }
 };

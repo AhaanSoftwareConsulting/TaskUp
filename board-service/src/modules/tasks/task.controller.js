@@ -31,7 +31,7 @@ const createTask = async (req, res) => {
     const memberSet = new Set(board.members.map(String));
     const assignees = [...new Set((assignedTo || []).map(String))].filter((id) => memberSet.has(id));
 
-    const newTask = await taskRepo.create({ title: String(title).trim(), description, priority, due_date, start_date, columnId, boardId, assignedTo: assignees });
+    const newTask = await taskRepo.create({ title: String(title).trim(), description, priority, due_date, start_date, columnId, boardId, assignedTo: assignees, createdBy: req.user.id });
     await activityRepo.add(newTask.id, { userId: req.user.id, action: 'Task created' });
 
     Promise.all(
@@ -54,25 +54,33 @@ const moveTask = async (req, res) => {
     if (!access) return;
     const { task, board } = access;
 
-    // the target column must belong to the same board
     const newCol = await columnRepo.findById(newColumnId);
     if (!newCol || String(newCol.board_id) !== String(task.board_id)) {
       return res.status(400).json({ message: 'Invalid target column' });
     }
-
     const oldColumnId = task.column_id;
     const changed = String(oldColumnId) !== String(newColumnId);
-    const oldCol = changed ? await columnRepo.findById(oldColumnId) : newCol;
-    const oldTitle = oldCol?.name || 'Unknown';
+    const oldTitle = (changed ? await columnRepo.findById(oldColumnId) : newCol)?.name || 'Unknown';
 
+    let reviewerId = null; // the creator, when the task is completed by someone else
     if (changed) {
       await taskRepo.setColumn(taskId, newColumnId);
       await activityRepo.add(taskId, { userId: req.user.id, action: `Moved status from "${oldTitle}" to "${newCol.name}"` });
+
+      const creatorId = task.created_by ? String(task.created_by) : null;
+      const isMember = creatorId && board.members.map(String).includes(creatorId);
+      if (newCol.name === 'Completed' && isMember && creatorId !== String(req.user.id)) {
+        reviewerId = creatorId;
+        const current = ((await taskRepo.findFull(taskId)).assignedTo || []).map(String);
+        if (!current.includes(creatorId)) {
+          await taskRepo.addAssignee(taskId, creatorId);
+          await activityRepo.add(taskId, { userId: req.user.id, action: 'completed this task. It was assigned back to its creator for review' });
+        }
+      }
     } else {
       await activityRepo.add(taskId, { userId: req.user.id, action: `Changed position in ${oldTitle}` });
     }
 
-    // Reindex around the new position (ids only, no full task loads)
     const destIds = (await taskRepo.listIdsInColumn(task.board_id, newColumnId)).filter((id) => String(id) !== String(taskId));
     const pos = Math.max(0, Math.min(Number(newPosition) || 0, destIds.length));
     destIds.splice(pos, 0, taskId);
@@ -81,24 +89,25 @@ const moveTask = async (req, res) => {
       const oldIds = await taskRepo.listIdsInColumn(task.board_id, oldColumnId);
       await taskRepo.bulkUpdatePositions(oldIds.map((id, i) => ({ id, position: i })));
 
-      // Fire-and-forget so the card drops instantly even if email is slow
-      (async () => {
+      (async () => { // fire-and-forget so the card drops instantly
         const full = await taskRepo.findFull(taskId);
         const [actor, assignees] = await Promise.all([getUserById(req.user.id), getUsersByIds(full.assignedTo)]);
-        await Promise.all(
-          Object.values(assignees).filter((u) => String(u.id) !== String(req.user.id) && u.email).map((u) =>
-            notifyUser({
-              userId: u.id,
-              title: 'Task moved',
-              message: `"${task.title}" moved from "${oldTitle}" to "${newCol.name}"`,
-              email: { to: u.email, ...templates.statusChanged({
-                taskTitle: task.title, boardName: board.name, changedBy: actor?.full_name || 'Someone', from: oldTitle, to: newCol.name,
-              }) },
-            }))
-        );
+        const actorName = actor?.full_name || 'Someone';
+        const link = (u) => `${config.frontend.url}/${u.role || 'employee'}/dashboard/tasks/${taskId}`;
+        await Promise.all(Object.values(assignees).filter((u) => String(u.id) !== String(req.user.id)).map((u) =>
+          String(u.id) === reviewerId
+            ? notifyUser({
+                userId: u.id, title: 'Ready for your review',
+                message: `"${task.title}" was completed and assigned back to you`,
+                email: u.email ? { to: u.email, ...templates.readyForReview({ taskTitle: task.title, boardName: board.name, completedBy: actorName, taskLink: link(u) }) } : undefined,
+              })
+            : notifyUser({
+                userId: u.id, title: 'Task moved',
+                message: `"${task.title}" moved from "${oldTitle}" to "${newCol.name}"`,
+                email: u.email ? { to: u.email, ...templates.statusChanged({ taskTitle: task.title, boardName: board.name, changedBy: actorName, from: oldTitle, to: newCol.name }) } : undefined,
+              })));
       })().catch(logErr('move notifications'));
     }
-
     await send(res, taskId, req);
   } catch (error) {
     console.error('moveTask error:', error);

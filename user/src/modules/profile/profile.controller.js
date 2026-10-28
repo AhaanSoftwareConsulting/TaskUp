@@ -2,6 +2,7 @@
  * profile.controller.js
  * HTTP layer — parse request, call service, send response.
  */
+const { AppError } = require('../../utils/errors');
 const service = require('./profile.service');
 
 /** POST /profile — create the calling user's profile */
@@ -85,6 +86,20 @@ async function deleteProfile(req, res, next) {
   }
 }
 
+async function saveMyProfile(req, res, next) {
+  try {
+    const { location, experience, description, contactPhone, contactEmail } = req.body; // allowlist
+    res.status(200).json(await service.saveMyProfile(req.user.id, { location, experience, description, contactPhone, contactEmail }));
+  } catch (err) { next(err); }
+}
+async function uploadAvatar(req, res, next) {
+  try {
+    if (!req.file) throw new AppError('No image received', 400, 'VALIDATION_ERROR');
+    res.status(200).json(await service.setAvatar(req.user.id, req.file));
+  } catch (err) { next(err); }
+}
+
+
 module.exports = {
   createProfile,
   getMyProfile,
@@ -93,4 +108,6 @@ module.exports = {
   updateMyProfile,
   reviewProfile,
   deleteProfile,
+  saveMyProfile,
+  uploadAvatar
 };

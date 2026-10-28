@@ -103,4 +103,11 @@ export type Task = {
 
   created_at: Date;
   updated_at: Date;
+  created_by: string | null;
+creator: User | null;
+closed_at: string | null;
+closed_note: string | null;
+closed_by_user: User | null;
+can_close: boolean;
+can_reopen: boolean;
 };

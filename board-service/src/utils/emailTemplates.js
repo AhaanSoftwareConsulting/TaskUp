@@ -138,5 +138,24 @@ module.exports = {
     'Open Task'
   ),
 }),
+taskClosed: ({ taskTitle, boardName, actorName, note, taskLink }) => ({
+  subject: `Task closed: ${taskTitle}`,
+  html: wrap('Task closed',
+    `<p style="margin:0 0 20px 0;"><b>${esc(actorName)}</b> closed <b>${esc(taskTitle)}</b> in <b>${esc(boardName)}</b>. It is now read-only unless someone reopens it.</p>
+     ${note ? `<div style="background:#f3f4f6;border-left:4px solid #2563eb;padding:15px 18px;margin:0 0 25px 0;border-radius:4px;color:#374151;">${esc(note)}</div>` : ''}`,
+    taskLink, 'View Task'),
+}),
+taskReopened: ({ taskTitle, boardName, actorName, taskLink }) => ({
+  subject: `Task reopened: ${taskTitle}`,
+  html: wrap('Task reopened',
+    `<p style="margin:0 0 25px 0;"><b>${esc(actorName)}</b> reopened <b>${esc(taskTitle)}</b> in <b>${esc(boardName)}</b>. You can continue working on it.</p>`,
+    taskLink, 'View Task'),
+}),
+readyForReview: ({ taskTitle, boardName, completedBy, taskLink }) => ({
+  subject: `Ready for your review: ${taskTitle}`,
+  html: wrap('Ready for your review',
+    `<p style="margin:0 0 25px 0;"><b>${esc(completedBy)}</b> marked <b>${esc(taskTitle)}</b> in <b>${esc(boardName)}</b> as completed and assigned it back to you. Review it and close the task when you're happy.</p>`,
+    taskLink, 'Review Task'),
+}),
 
 };

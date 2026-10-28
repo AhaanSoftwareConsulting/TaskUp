@@ -3,7 +3,7 @@ const { downloadUrl, previewUrl } = require('../../utils/cloudinary');
 const timerRepo = require('../timers/timer.repository');
 const { parseBlocks } = require('../comments/comment.blocks');
 const { canEdit, canDelete } = require('../comments/comment.policy');
-
+const { canClose, canReopen } = require('./task.policy');
 function formatAttachment(a, resolve) {
   const isImage = (a.file_type || '').startsWith('image/');
   return {
@@ -34,6 +34,7 @@ async function presentTasks(tasks, viewer) {
       ...(t.attachments || []).map((a) => a.uploaded_by),
       ...(t.activityLog || []).map((a) => a.user_id),
       ...(t.comments || []).flatMap((c) => [c.user_id, ...(c.attachments || []).map((a) => a.uploaded_by)]),
+      ...tasks.flatMap((t) => [t.created_by, t.closed_by]),
     ]),
     ...sums.map((r) => r.user_id),
     ...actives.map((r) => r.user_id),
@@ -60,6 +61,11 @@ async function presentTasks(tasks, viewer) {
       created_at: c.created_at, edited_at: c.edited_at || null,
       can_edit: canEdit(viewer, c), can_delete: canDelete(viewer, c),
     })),
+    creator: resolve(t.created_by),
+closed_by_user: resolve(t.closed_by),
+is_closed: !!t.closed_at,
+can_close: canClose(viewer, t),
+can_reopen: canReopen(viewer, t),
   }));
 }
 

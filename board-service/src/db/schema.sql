@@ -179,3 +179,24 @@ ALTER TABLE task_daily_logs
 
 
 ALTER TABLE boards ADD COLUMN description VARCHAR(500) NULL AFTER name;
+ALTER TABLE tasks
+  ADD COLUMN created_by VARCHAR(100) NULL AFTER board_id,
+  ADD COLUMN closed_at TIMESTAMP NULL DEFAULT NULL,
+  ADD COLUMN closed_by VARCHAR(100) NULL,
+  ADD COLUMN closed_note VARCHAR(300) NULL;
+
+-- creators of existing tasks come from the activity log
+UPDATE tasks t
+JOIN task_activity_log l ON l.task_id = t.id AND l.action = 'Task created'
+SET t.created_by = l.user_id;
+
+CREATE TABLE task_time_sessions (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  task_id CHAR(36) NOT NULL,
+  user_id VARCHAR(100) NOT NULL,
+  started_ms BIGINT UNSIGNED NOT NULL,
+  ended_ms BIGINT UNSIGNED NOT NULL,
+  duration_ms BIGINT UNSIGNED NOT NULL,
+  CONSTRAINT fk_time_sessions_task FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE,
+  INDEX idx_time_sessions_task (task_id, started_ms)
+);

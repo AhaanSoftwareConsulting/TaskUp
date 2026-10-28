@@ -8,6 +8,7 @@ import notificationSlice from '../features/notifications/notificationSlice';
 import uiReducer from '../features/ui/loadingSlice';
 import userReducer from '../features/User/userSlice';
 import timerReducer from '../features/Timer/timerSlice'
+import profileReducer from '../features/Profile/profileSlice'
 import { listenerMiddleware } from './listenerMiddleware';
 export const store = configureStore({
     reducer: {
@@ -20,6 +21,7 @@ export const store = configureStore({
         notification: notificationSlice,
         timer: timerReducer,
         user: userReducer,
+        profile: profileReducer
       
     },
     middleware: (getDefaultMiddleware) =>
