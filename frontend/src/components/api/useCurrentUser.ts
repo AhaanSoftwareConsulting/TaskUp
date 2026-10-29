@@ -22,8 +22,9 @@ export const useCurrentUser = () => {
                 const user = res.data;
                 dispatch(setAuthState(user));
                 return user;
-            } catch (error) {
-                dispatch(logout());
+            } catch (error: any) {
+                const status = error?.response?.status;
+                if (status === 401 || status === 403) dispatch(logout());
                 throw error;
             }
         },

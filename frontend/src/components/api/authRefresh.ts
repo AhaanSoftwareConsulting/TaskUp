@@ -12,14 +12,7 @@ let refreshPromise: Promise<string | null> | null = null;
 export async function refreshAccessToken(): Promise<string | null> {
   if (refreshPromise) return refreshPromise;
 
-  refreshPromise = axios
-    // Raw axios, not userApiClient — going through userApiClient here would
-    // re-trigger its own response interceptor and recurse.
-    .post(
-      `${import.meta.env.VITE_USER_API_URL}/auth/refresh`,
-      {},
-      { withCredentials: true } // sends the httpOnly refreshToken cookie; nothing else needed
-    )
+  refreshPromise = axios.post(`${import.meta.env.VITE_USER_API_URL}/auth/refresh`, {}, { withCredentials: true, timeout: 70_000 })
     .then((res) => {
       // Backend inconsistency: POST /auth/login returns `accessToken`,
       // POST /auth/refresh returns `access_token` (snake_case). Handle both
@@ -28,13 +21,13 @@ export async function refreshAccessToken(): Promise<string | null> {
       tokenStore.set(newToken);
       return newToken;
     })
-    .catch((err) => {
-      // No valid refresh cookie (expired, revoked, or never logged in) —
-      // the session is genuinely over. Let the app know so it can redirect
-      // to login, without this low-level module needing to import Redux.
+   .catch((err) => {
+    const status = err?.response?.status;
+    if (status === 400 || status === 401 || status === 403) {   // the session is really over
       tokenStore.clear();
       window.dispatchEvent(new Event('auth:sessionExpired'));
-      throw err;
+    }
+    throw err;
     })
     .finally(() => {
       refreshPromise = null;

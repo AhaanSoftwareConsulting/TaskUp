@@ -99,7 +99,14 @@ export const AllTask = () => {
                       {/* IDENTIFY */}
                       <td className="px-6 py-5">
                         <div className="flex flex-col">
-                          <span className="text-base font-bold capitalize text-black">{t.title}</span>
+                          <span
+                            className={`text-base font-bold capitalize ${t.closed_at
+                                ? "line-through text-gray-400"
+                                : "text-black"
+                              }`}
+                          >
+                            {t.title}
+                          </span>
                           <div className="flex items-center gap-2 mt-1">
                             <span className="text-xs font-semibold capitalize text-gray-600">
                               {boards.find(b => b.id === t.board_id)?.name}

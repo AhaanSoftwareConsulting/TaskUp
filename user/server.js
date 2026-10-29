@@ -2,19 +2,23 @@ const app = require('./src/app');
 const config = require('./src/config/config');
 const { pool } = require('./src/config/database');
 
-async function start() {
-  try {
-    const conn = await pool.getConnection();
-    conn.release();
-    console.log('Connected to MySQL');
+app.locals.dbReady = false;
 
-    app.listen(config.app.port, () => {
-      console.log(`${config.app.name} listening on port ${config.app.port} (${config.app.env})`);
-    });
-  } catch (err) {
-    console.error('Failed to start server:', err.message);
-    process.exit(1);
+async function connectDb() {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      const conn = await pool.getConnection();
+      conn.release();
+      app.locals.dbReady = true;
+      console.log('Connected to MySQL');
+      return;
+    } catch (err) {
+      app.locals.dbReady = false;
+      console.error(`DB not available (attempt ${attempt}): ${err.message}`);
+      await new Promise((r) => setTimeout(r, Math.min(60_000, 5_000 * attempt))); // backs off, capped at 1/min
+    }
   }
 }
 
-start();
+app.listen(config.app.port, () => console.log(`${config.app.name} listening on port ${config.app.port} (${config.app.env})`));
+connectDb();

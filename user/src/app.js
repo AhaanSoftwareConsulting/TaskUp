@@ -29,7 +29,7 @@ app.use(cookieParser());
 app.use(requestId);
 app.use(requestLogger);
 app.use(rateLimiter);
-
+app.get('/health', (req, res) => res.status(200).json({ status: 'ok', db: app.locals.dbReady === true }));
 app.use('/auth', authRoutes);
 app.use('/approval', approvalRoutes);
 app.use('/auth/email-verification', emailVerificationRoutes);
@@ -39,5 +39,9 @@ app.use('/api/users', accountsRoutes);
 app.use('/internal', internalRoutes);
 app.use(notFoundHandler);
 app.use(errorHandler);
-
+app.use((req, res, next) =>
+  app.locals.dbReady === false
+    ? res.status(503).set('Retry-After', '30').json({ error_code: 'DB_UNAVAILABLE', message: 'Service is starting. Try again shortly.' })
+    : next()
+);
 module.exports = app;
