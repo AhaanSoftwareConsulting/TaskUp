@@ -3,9 +3,7 @@ import { useAppDispatch, useAppSelector } from "../redux/app/hook";
 import { getTasks } from "../redux/features/Task/taskSlice";
 import { fetchColumn } from "../redux/features/Column/columnSlice";
 import { slugify } from "./slugify";
-
-export type ProjectStatus = "Active" | "On Hold" | "Completed" | "Delayed";
-export type Priority = "High" | "Medium" | "Low";
+import type { ProjectPriority, ProjectStatus } from "../types/project.Types";
 
 export interface Resource {
   id: string;
@@ -19,11 +17,15 @@ export interface ProjectView {
   slug: string;
   name: string;
   description: string;
-  client: string;
-  manager: string;
+  clientName: string;
+  clientContactPerson: string;
+  clientEmail: string;
+  clientPhone: string;
+  managerId: string;
+  managerName: string;
   startDate: string | null;
   deadline: string | null;
-  priority: Priority;
+  priority: ProjectPriority;
   status: ProjectStatus;
   progress: number;
   totalTasks: number;
@@ -32,28 +34,28 @@ export interface ProjectView {
   overdueTasks: number;
   resources: Resource[];
   loggedMs: number;
-  estimatedMs: number;
-  raw: any;
+  estimatedHours: number;
 }
-
-const HOUR = 1000 * 60 * 60;
-
-export const msToHours = (ms = 0) => Math.round((ms / HOUR) * 10) / 10;
 
 const idOf = (x: any): string =>
   x && typeof x === "object" ? String(x.id ?? x._id ?? "") : String(x ?? "");
-
-const nameOf = (x: any, fallback = "—"): string => {
-  if (!x) return fallback;
-  if (typeof x === "string") return x || fallback;
-  return x.name || x.fullName || fallback;
-};
-
+const personName = (x: any): string => (x ? x.name || x.full_name || x.fullName || "" : "");
 const toDate = (v: any): Date | null => {
   if (!v) return null;
   const d = new Date(v);
   return isNaN(d.getTime()) ? null : d;
 };
+
+// The tasks API can return snake_case or camelCase depending on the repository mapping,
+// so every task field is read through these helpers.
+const taskBoardId = (t: any) => idOf(t.board ?? t.boardId ?? t.board_id);
+const taskColumn = (t: any) => t.column ?? t.columnId ?? t.column_id;
+const taskAssignees = (t: any): any[] => t.assignedTo ?? t.assignees ?? [];
+const taskDue = (t: any) => t.dueDate ?? t.due_date;
+const taskLoggedMs = (t: any) =>
+  Number(t.timeManagement?.totalLoggedTime ?? t.totalLoggedTime ?? t.total_logged_time ?? 0);
+const taskEstimatedHours = (t: any) =>
+  Number(t.timeManagement?.estimatedTime ?? t.estimatedTime ?? t.estimated_time ?? 0);
 
 export const useProjects = () => {
   const dispatch = useAppDispatch();
@@ -65,103 +67,88 @@ export const useProjects = () => {
 
   const isManager = user?.role === "manager" || user?.role === "ceo";
 
-  // Tasks: once per mount (same scope the sidebar's task link uses)
   useEffect(() => {
     dispatch(getTasks({ scope: isManager ? "all" : "mine" }));
   }, [dispatch, isManager]);
 
-  // Columns: only for boards that haven't been loaded yet
   useEffect(() => {
     boards.forEach((b) => {
-      const id = idOf(b);
-      if (id && !columnsByBoard[id]) dispatch(fetchColumn(id));
+      if (b?.id && !columnsByBoard[b.id]) dispatch(fetchColumn(b.id));
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dispatch, boards]);
+
+  // TEMPORARY: remove once the project pages show tasks correctly.
+  useEffect(() => {
+    if (tasks.length) console.log("[useProjects] first task from API:", tasks[0]);
+    else console.log("[useProjects] no tasks in redux yet, loading =", taskLoading);
+  }, [tasks, taskLoading]);
 
   const projects = useMemo<ProjectView[]>(() => {
     const now = new Date();
 
     const columnName = (task: any, boardId: string) => {
-      if (task.column?.name) return task.column.name;
+      const col = taskColumn(task);
+      if (col?.name) return col.name;
       const cols = columnsByBoard[boardId] || [];
-      return cols.find((c: any) => idOf(c) === idOf(task.column))?.name || "";
+      return cols.find((c: any) => idOf(c) === idOf(col))?.name || "";
     };
+    const isDone = (task: any, boardId: string) =>
+      task.progress === 100 || String(columnName(task, boardId)).trim().toLowerCase() === "completed";
 
-    const isDone = (task: any, boardId: string) => {
-      const n = String(columnName(task, boardId)).trim().toLowerCase();
-      return task.progress === 100 || n === "completed" || n === "done";
-    };
-
-    const estimatedOf = (t: any) => {
-      const tm = t.timeManagement || {};
-      if (tm.estimatedTime != null) return Number(tm.estimatedTime) || 0; // ms
-      if (tm.estimatedHours != null) return (Number(tm.estimatedHours) || 0) * HOUR;
-      if (t.estimatedHours != null) return (Number(t.estimatedHours) || 0) * HOUR;
-      return 0;
-    };
-
-    return (boards || [])
-      .filter((b) => !b.archived && b.status !== "Archived")
-      .map((b) => {
+    return boards
+      .filter((b) => !b.archived)
+      .map((b): ProjectView => {
         const boardId = idOf(b);
-        const boardTasks = tasks.filter((t) => t?.board && idOf(t.board) === boardId);
+        const boardTasks = tasks.filter((t) => t && taskBoardId(t) === boardId);
 
-        let completed = 0;
-        let overdue = 0;
-        let loggedMs = 0;
-        let taskEstimatedMs = 0;
+        let completed = 0, overdue = 0, loggedMs = 0, taskEstimatedHoursSum = 0;
         const people: Record<string, Resource> = {};
 
         boardTasks.forEach((t) => {
           const done = isDone(t, boardId);
           if (done) completed += 1;
-
-          const due = toDate(t.dueDate ?? t.deadline ?? t.endDate);
+          const due = toDate(taskDue(t));
           if (!done && due && due < now) overdue += 1;
 
-          const taskMs = Number(t.timeManagement?.totalLoggedTime || 0);
+          const taskMs = taskLoggedMs(t);
           loggedMs += taskMs;
-          taskEstimatedMs += estimatedOf(t);
+          taskEstimatedHoursSum += taskEstimatedHours(t);
 
-          const assignees: any[] = t.assignedTo || [];
+          const assignees = taskAssignees(t);
           assignees.forEach((m) => {
             const mid = idOf(m);
             if (!mid) return;
-            if (!people[mid]) {
-              people[mid] = { id: mid, name: nameOf(m, "Unknown"), role: m.role || "", loggedMs: 0 };
-            }
-            // A task's time is split equally between its assignees so the
-            // per-person totals add up to the project total.
+            people[mid] ||= { id: mid, name: personName(m) || "Unknown", role: m.role || "", loggedMs: 0 };
+            // Time is split equally between a task's assignees so per-person totals add up.
             people[mid].loggedMs += taskMs / assignees.length;
           });
         });
 
         const total = boardTasks.length;
         const progress = total > 0 ? Math.round((completed / total) * 100) : 0;
-        const deadline = b.deadline ?? b.dueDate ?? b.endDate ?? null;
-        const due = toDate(deadline);
-        if (due) due.setHours(23, 59, 59, 999);
-        const rawStatus = String(b.status || "").toLowerCase();
+        const dueEnd = toDate(b.deadline);
+        if (dueEnd) dueEnd.setHours(23, 59, 59, 999);
 
         let status: ProjectStatus = "Active";
-        if (total > 0 && progress === 100) status = "Completed";
-        else if (rawStatus.includes("hold")) status = "On Hold";
-        else if (rawStatus === "delayed" || (due && due < now)) status = "Delayed";
-
-        const p = String(b.priority || "").toLowerCase();
-        const priority: Priority = p === "high" ? "High" : p === "low" ? "Low" : "Medium";
+        if (b.status === "Completed" || (total > 0 && progress === 100)) status = "Completed";
+        else if (b.status === "On Hold") status = "On Hold";
+        else if (dueEnd && dueEnd < now) status = "Delayed";
 
         return {
           id: boardId,
           slug: slugify(b.name),
           name: b.name,
           description: b.description || "",
-          client: nameOf(b.client ?? b.clientName),
-          manager: nameOf(b.manager ?? b.projectManager ?? b.createdBy ?? b.owner),
-          startDate: b.startDate ?? b.createdAt ?? null,
-          deadline,
-          priority,
+          clientName: b.clientName || "",
+          clientContactPerson: b.clientContactPerson || "",
+          clientEmail: b.clientEmail || "",
+          clientPhone: b.clientPhone || "",
+          managerId: idOf(b.projectManager) || b.projectManagerId || "",
+          managerName: personName(b.projectManager),
+          startDate: b.startDate ?? null,
+          deadline: b.deadline ?? null,
+          priority: b.priority || "Medium",
           status,
           progress,
           totalTasks: total,
@@ -170,34 +157,10 @@ export const useProjects = () => {
           overdueTasks: overdue,
           resources: Object.values(people),
           loggedMs,
-          estimatedMs: b.estimatedHours != null ? Number(b.estimatedHours) * HOUR : taskEstimatedMs,
-          raw: b,
-        } as ProjectView;
+          estimatedHours: b.estimatedHours != null ? Number(b.estimatedHours) : taskEstimatedHoursSum,
+        };
       });
   }, [boards, tasks, columnsByBoard]);
 
-  return {
-    projects,
-    user,
-    isManager,
-    loading: taskLoading === "pending" && tasks.length === 0,
-  };
-};
-
-export const formatDate = (v: string | null) => {
-  const d = toDate(v);
-  return d ? d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) : "—";
-};
-
-export const statusStyle: Record<ProjectStatus, string> = {
-  Active: "bg-emerald-500/15 text-emerald-400",
-  "On Hold": "bg-orange-500/15 text-orange-400",
-  Completed: "bg-sky-500/15 text-sky-400",
-  Delayed: "bg-red-500/15 text-red-400",
-};
-
-export const priorityStyle: Record<Priority, string> = {
-  High: "bg-red-500/15 text-red-400",
-  Medium: "bg-amber-500/15 text-amber-400",
-  Low: "bg-zinc-500/20 text-zinc-300",
+  return { projects, user, isManager, loading: taskLoading === "pending" && tasks.length === 0 };
 };

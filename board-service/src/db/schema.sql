@@ -200,3 +200,22 @@ CREATE TABLE task_time_sessions (
   CONSTRAINT fk_time_sessions_task FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE,
   INDEX idx_time_sessions_task (task_id, started_ms)
 );
+
+ALTER TABLE boards
+  ADD COLUMN client_name           VARCHAR(150) NULL AFTER description,
+  ADD COLUMN client_contact_person VARCHAR(150) NULL AFTER client_name,
+  ADD COLUMN client_email          VARCHAR(150) NULL AFTER client_contact_person,
+  ADD COLUMN client_phone          VARCHAR(30)  NULL AFTER client_email,
+  ADD COLUMN project_manager_id    VARCHAR(100) NULL AFTER owner,
+  ADD COLUMN start_date            DATE NULL,
+  ADD COLUMN deadline              DATE NULL,
+  ADD COLUMN priority  ENUM('Low','Medium','High')           NOT NULL DEFAULT 'Medium',
+  ADD COLUMN status    ENUM('Active','On Hold','Completed')  NOT NULL DEFAULT 'Active',
+  ADD COLUMN estimated_hours       INT NULL,
+  ADD COLUMN is_archived           BOOLEAN NOT NULL DEFAULT FALSE,
+  ADD INDEX idx_boards_archived_status (is_archived, status),
+  ADD INDEX idx_boards_manager (project_manager_id);
+
+-- Back-fill existing projects
+UPDATE boards SET project_manager_id = owner    WHERE project_manager_id IS NULL;
+UPDATE boards SET start_date = DATE(created_at) WHERE start_date IS NULL;
