@@ -36,3 +36,92 @@ button{
   -ms-overflow-style: none; /* IE */
   scrollbar-width: none; /* Firefox */
 }
+
+
+
+/* ========================================
+   HERO BANNER ANIMATIONS
+======================================== */
+
+/* Hand Wave */
+@keyframes wave {
+  0% {
+    transform: rotate(0deg);
+  }
+
+  10% {
+    transform: rotate(14deg);
+  }
+
+  20% {
+    transform: rotate(-8deg);
+  }
+
+  30% {
+    transform: rotate(14deg);
+  }
+
+  40% {
+    transform: rotate(-4deg);
+  }
+
+  50% {
+    transform: rotate(10deg);
+  }
+
+  60%,
+  100% {
+    transform: rotate(0deg);
+  }
+}
+
+/* Floating Background Orbs */
+@keyframes float {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+
+  50% {
+    transform: translate3d(-25px, 20px, 0) scale(1.12);
+  }
+}
+
+/* Moving Gradient */
+@keyframes gradientMove {
+  0%,
+  100% {
+    transform: translateX(-30%);
+    opacity: 0.3;
+  }
+
+  50% {
+    transform: translateX(30%);
+    opacity: 1;
+  }
+}
+
+/* Floating Particles */
+@keyframes particle {
+  0%,
+  100% {
+    transform: translateY(0) scale(1);
+    opacity: 0.3;
+  }
+
+  50% {
+    transform: translateY(-22px) scale(1.5);
+    opacity: 1;
+  }
+}
+
+/* Respect Reduced Motion Preferences */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+  }
+}
