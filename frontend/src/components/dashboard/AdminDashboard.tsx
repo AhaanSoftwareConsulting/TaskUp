@@ -11,6 +11,8 @@ import { Teams } from './tabs/Team'
 import { TaskPage } from './pages/TaskPage'
 import { Profile } from './profile/Profile'
 import { TaskHoursReport } from './report/TaskHoursReport'
+import ProjectsPage from './project/ProjectPage'
+import ProjectDetailsPage from './project/ProjectDetailsPage'
 
 
 export const AdminDashboard = () => {
@@ -50,6 +52,8 @@ export const AdminDashboard = () => {
           <Route path="tasks/:taskId" element={<TaskPage />} />
           <Route path="profile" element={<Profile />} />
           <Route path="tasks/:taskId/hours" element={<TaskHoursReport />} />
+          <Route path="projects" element={<ProjectsPage />} />
+<Route path="projects/:projectId" element={<ProjectDetailsPage />} />
         </Routes>
       </div>
     </div>
