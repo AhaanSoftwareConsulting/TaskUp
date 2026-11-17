@@ -1,5 +1,5 @@
 
-import { Sidebar } from './Sidebar'
+import { Sidebar } from './Sidebar/Sidebar'
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { HomeTab } from './Home/HomeTab'
 import { useAppSelector } from '../redux/app/hook'
@@ -11,8 +11,9 @@ import { Teams } from './tabs/Team'
 import { TaskPage } from './pages/TaskPage'
 import { Profile } from './profile/Profile'
 import { TaskHoursReport } from './report/TaskHoursReport'
-import ProjectsPage from './project/ProjectPage'
-import ProjectDetailsPage from './project/ProjectDetailsPage'
+import ProjectsPage from '../pages/Projects/ProjectsPage'
+import ProjectDetailsPage from '../pages/Projects/ProjectDetailsPage'
+
 
 
 export const AdminDashboard = () => {
