@@ -15,7 +15,7 @@ interface AuthProps{
         <img
           src={logoImg}
           alt="Login"
-          className="w-[600px] h-auto object-cover"
+          className="w-full h-auto object-cover"
         />
       </div>
  

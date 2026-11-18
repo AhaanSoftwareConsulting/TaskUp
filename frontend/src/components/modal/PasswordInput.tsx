@@ -31,15 +31,7 @@ export const PasswordInput = ({
         placeholder={placeholder}
         {...register(name, { required })}
         className={`
-          w-full
-          px-6
-          py-4
-          pr-14
-          border
-          border-gray-300
-          rounded-full
-          focus:outline-none
-          focus:border-black
+          h-[54px] w-full rounded-xl border border-gray-200 bg-gray-50/60 px-5 text-sm text-[#171B2E] outline-none transition-all duration-200 placeholder:text-gray-400 hover:border-gray-300 hover:bg-white focus:border-[#278CFA] focus:bg-white focus:ring-4 focus:ring-blue-500/10
           ${className}
         `}
       />
