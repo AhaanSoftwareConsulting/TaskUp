@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState  } from "react";
 import type { Task } from "../../../types/board.Types";
 import { useBoardColumns } from "../../../hooks/useBoardColumns";
 import { ActivityDetails } from "../ActivityDetails";
@@ -9,6 +9,8 @@ import { TaskTitle } from "./TaskTitle";
 import { TaskProperties } from "./TaskProperties";
 import { DescriptionSection } from "./DescriptionSection";
 import { TimeSection } from "./TimeSection";
+import { useAppDispatch } from "../../../redux/app/hook";
+import { fetchColumn } from "../../../redux/features/Column/columnSlice";
 
 interface Props { task: Task; onClose: () => void; variant?: "modal" | "page" }
 
@@ -18,6 +20,7 @@ export const TaskDetails = ({ task, onClose, variant = "modal" }: Props) => {
   const status = columns.find((c) => c.id === task.column_id)?.name ?? null;
   const locked = !!task.closed_at;
   const isPage = variant === "page";
+  const dispatch = useAppDispatch();
 
   useEffect(() => {
     if (isPage) return;
@@ -28,6 +31,12 @@ export const TaskDetails = ({ task, onClose, variant = "modal" }: Props) => {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [isPage, onClose]);
+
+  useEffect(() => {
+    if (task.board_id) {
+      dispatch(fetchColumn(task.board_id));
+    }
+  }, [dispatch, task.board_id]);
 
   const content = (
     <div className="flex h-full min-h-0 flex-col bg-white">
