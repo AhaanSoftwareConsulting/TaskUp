@@ -62,7 +62,7 @@ export const TaskTimePanel = ({
     boards.find((b) => b.id === task.board_id)?.name || "—";
 
   return (
-    <aside className="hidden w-[35%] min-w-[320px] flex-col overflow-y-auto border-l border-[#E9EDF5] bg-[#F7F9FC] p-4 md:flex">
+    <aside className="hidden w-[35%] min-w-[320px] flex-col overflow-y-auto   p-4 md:flex">
 
       {/* TOP BAR */}
       <div className="mb-4 flex items-center justify-between">

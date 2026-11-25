@@ -251,50 +251,110 @@ const closedHere = board
                       </div>
                     )}
 
-                    <div className="flex items-center justify-between mt-4 text-[11px] font-medium">
-                      <div className="flex items-center gap-1 text-gray-900">
-                        <CalendarBlankIcon size={14} />
-                        {t.start_date || t.due_date ? (
-                          <>
-                            {t.start_date
-                              ? new Date(t.start_date).toLocaleDateString(
-                                "en-US",
-                                {
-                                  month: "short",
-                                  day: "numeric",
-                                },
-                              )
-                              : "-"}
-                            {" - "}
-                            {t.due_date
-                              ? new Date(t.due_date).toLocaleDateString(
-                                "en-US",
-                                {
-                                  month: "short",
-                                  day: "numeric",
-                                },
-                              )
-                              : "-"}
-                          </>
-                        ) : (
-                          "-"
-                        )}
-                      </div>
-                      <div
-                        className={`flex items-center gap-1 font-semibold px-2 py-1 rounded-full text-[10px]
-      ${t.priority === "High"
-                            ? "bg-red-100 text-red-600"
-                            : t.priority === "Medium"
-                              ? "bg-yellow-100 text-yellow-600"
-                              : t.priority === "Low"
-                                ? "bg-green-100 text-green-600"
-                                : "bg-gray-100 text-gray-600"
-                          }`}
-                      >
-                        <FlagIcon size={12} weight="fill" />
-                        {t.priority || "None"}
-                      </div>
-                    </div>
+                   {/* Date & Priority */}
+{/* Date & Priority */}
+<div className="flex items-center justify-between mt-4 text-[11px] font-medium">
+
+  {/* Start Date - Due Date */}
+  <div className="flex items-center gap-1 text-gray-900">
+    <CalendarBlankIcon size={14} />
+
+    {t.start_date || t.due_date ? (
+      <>
+        {t.start_date
+          ? new Date(t.start_date).toLocaleDateString("en-US", {
+              month: "short",
+              day: "numeric",
+            })
+          : "-"}
+
+        {" - "}
+
+        {t.due_date
+          ? new Date(t.due_date).toLocaleDateString("en-US", {
+              month: "short",
+              day: "numeric",
+            })
+          : "-"}
+      </>
+    ) : (
+      "-"
+    )}
+  </div>
+
+  {/* Priority */}
+  <div
+    className={`flex items-center gap-1 font-semibold px-2 py-1 rounded-full text-[10px]
+      ${
+        t.priority === "High"
+          ? "bg-red-100 text-red-600"
+          : t.priority === "Medium"
+            ? "bg-yellow-100 text-yellow-600"
+            : t.priority === "Low"
+              ? "bg-green-100 text-green-600"
+              : "bg-gray-100 text-gray-600"
+      }`}
+  >
+    <FlagIcon size={12} weight="fill" />
+    {t.priority || "None"}
+  </div>
+</div>
+
+{/* Created By */}
+{/* Created By & Creation Date */}
+{/* Created By & Creation Date */}
+<div className="flex items-start gap-2 mt-3 text-[11px]">
+
+  {/* User Icon */}
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    width="18"
+    height="18"
+    viewBox="0 0 256 256"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="16"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className="text-gray-500 shrink-0 mt-0.5"
+  >
+    <circle cx="128" cy="128" r="112" />
+    <circle cx="128" cy="96" r="40" />
+    <path d="M56 208c8-36 36-56 72-56s64 20 72 56" />
+  </svg>
+
+  <span className="text-gray-500 whitespace-nowrap mt-1">
+    Created by
+  </span>
+
+  <div className="flex items-start gap-2 ml-2 flex-1 min-w-0">
+
+    {/* Creator Avatar */}
+    <div className="w-9 h-9 rounded-full bg-violet-600 text-white flex items-center justify-center font-semibold text-[12px] shrink-0">
+      {t.creator?.full_name?.charAt(0)?.toUpperCase() || "U"}
+    </div>
+
+    {/* Creator Name & Date */}
+    <div className="flex flex-wrap items-center gap-x-2 min-w-0 flex-1">
+
+      <span className="font-semibold text-gray-800 whitespace-normal break-words leading-5">
+        {t.creator?.full_name || "Unknown"}
+      </span>
+
+      <span className="text-gray-400 whitespace-nowrap leading-5">
+        ·{" "}
+        {t.created_at
+          ? new Date(t.created_at).toLocaleDateString("en-US", {
+              day: "numeric",
+              month: "short",
+              year: "numeric",
+            })
+          : "-"}
+      </span>
+
+    </div>
+  </div>
+</div>
 
                     {/* BOTTOM SECTION */}
                     <div className="flex items-center justify-between mt-4 pt-3 border-t border-gray-100 text-[11px] text-gray-900">

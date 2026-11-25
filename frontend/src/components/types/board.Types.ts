@@ -111,3 +111,4 @@ closed_by_user: User | null;
 can_close: boolean;
 can_reopen: boolean;
 };
+
